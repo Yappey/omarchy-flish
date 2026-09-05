@@ -31,6 +31,11 @@ state.json
 /tools/curate/fixtures/*
 !/tools/curate/fixtures/.gitkeep
 
+# --- Test tooling ---------------------------------------------------------
+# tests/ is a Node workspace (ajv, for JSON Schema validation). The lockfile is
+# committed so CI and a contributor resolve the same tree.
+node_modules/
+
 # --- OS / editor ----------------------------------------------------------
 .DS_Store
 .idea/

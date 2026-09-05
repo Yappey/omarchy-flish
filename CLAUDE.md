@@ -12,6 +12,10 @@ to a desktop overlay that runs inside Omarchy 4's `omarchy-shell`.
 ## Commands
 
 ```bash
+cd tests && npm install && npm test  # templates + tutor logic, ~70ms, no desktop
+node --test --test-name-pattern "No-Do"          # a single test
+scripts/e2e-tutor.py                 # end-to-end, needs a live shell (~25s)
+
 engine/scripts/build.sh             # debug build -> engine/build/omarchy-flish
 engine/scripts/build.sh release     # -o:speed -no-bounds-check
 engine/scripts/test.sh              # odin test tests
@@ -22,9 +26,10 @@ omarchy plugin enable flish.tutor   # writes the shell.json entry for you
 omarchy-plugin-validate tutor       # manifest/entrypoint/symlink/reserved-id checks
 ```
 
-`test.sh` runs the whole `tests` package; it takes no filter argument, so to
-run one test either add an `odin test` flag yourself or invoke the compiler
-directly. There is no linter, and `templates/` and `tutor/` have no build step.
+`tests/` is a Node workspace (one devDependency, ajv) covering the hint
+dictionary and the tutor's protocol logic; `tests/README.md` explains the layers
+and lists what still needs manual eyes. Engine `test.sh` runs the whole `tests`
+package and takes no filter argument. There is no linter.
 
 ### Developing the overlay
 
@@ -109,6 +114,12 @@ What the host does with a plugin, and the traps in it:
   `~/.config/omarchy/shell.json`; the `omarchy.*` id namespace is reserved and
   symlinks anywhere inside a plugin folder are rejected (hence D8, and why the
   install script copies).
+- **QML types cannot be loaded outside the Quickshell binary** — `qmltestrunner`
+  fails with `plugin "quickshell-coreplugin" not found`. Anything left in a
+  `.qml` file is only reachable through a running shell, so pure logic belongs
+  in a `.js` file beside it (`tutor/TutorProtocol.js`; upstream does the same
+  with `NotificationLogic.js`, `OsdModel.js`). Keep those files free of QML
+  types, imports, I/O and `new Date()` so both QML and Node can load them.
 - A fullscreen layer-shell surface swallows every desktop click unless the input
   region is punched back out with `mask: Region { item: theCard }`. There is no
   `pointer-events: none`. Prefer a fixed fullscreen surface over one sized to
@@ -149,4 +160,7 @@ Closest first-party references: `plugins/osd/` (transient summoned card),
   Decide `core:text/regex` vs a PCRE2 binding (D2).
 - **Tutor overlay works end to end** against the fake engine: hint renders,
   `ack` and `feedback` round-trip, dismiss is id-scoped, TTL and disconnect both
-  retire the card.
+  retire the card. Verified by `scripts/e2e-tutor.py` (6/6 on a live shell).
+- **Not machine-verified:** the overlay's click-through mask. `hyprctl` does not
+  expose input regions and no pointer-injection tool is installed, so it is on
+  the manual checklist in `tests/README.md`.

@@ -1,0 +1,70 @@
+[
+  {
+    "name": "hello is valid but needs no action",
+    "line": "{\"v\":1,\"type\":\"hello\",\"session\":\"01JB2Z\",\"pid\":48211,\"engine\":\"0.1.0\"}",
+    "action": "ignore",
+    "reason": "unhandled-type"
+  },
+  {
+    "name": "canonical hint from docs/ipc-protocol.md",
+    "line": "{\"v\":1,\"type\":\"hint\",\"id\":\"01JB2Z\",\"session\":\"01JB2Z\",\"template\":\"cd-into-file\",\"title\":\"That is a file, not a folder\",\"body\":\"secret_map.txt is a file. Which command shows what is inside a file?\",\"actions\":[\"helpful\",\"confusing\"],\"ttl_ms\":12000}",
+    "action": "hint"
+  },
+  {
+    "name": "hint with ttl_ms 0 means stay until dismissed",
+    "line": "{\"v\":1,\"type\":\"hint\",\"id\":\"HOLD\",\"title\":\"t\",\"body\":\"b\",\"ttl_ms\":0}",
+    "action": "hint"
+  },
+  {
+    "name": "canonical dismiss",
+    "line": "{\"v\":1,\"type\":\"dismiss\",\"id\":\"01JB2Z\"}",
+    "action": "dismiss"
+  },
+  {
+    "name": "unknown keys are ignored, not rejected",
+    "line": "{\"v\":1,\"type\":\"hint\",\"id\":\"A1\",\"title\":\"t\",\"body\":\"b\",\"future_field\":{\"nested\":true}}",
+    "action": "hint"
+  },
+  {
+    "name": "a newer protocol major is ignored, not an error",
+    "line": "{\"v\":2,\"type\":\"hint\",\"id\":\"A1\"}",
+    "action": "ignore",
+    "reason": "unsupported-version"
+  },
+  {
+    "name": "missing version is not v1",
+    "line": "{\"type\":\"hint\",\"id\":\"A1\"}",
+    "action": "ignore",
+    "reason": "unsupported-version"
+  },
+  {
+    "name": "unknown type is ignored",
+    "line": "{\"v\":1,\"type\":\"sparkle\",\"id\":\"A1\"}",
+    "action": "ignore",
+    "reason": "unhandled-type"
+  },
+  {
+    "name": "hint without an id cannot be routed",
+    "line": "{\"v\":1,\"type\":\"hint\",\"title\":\"t\"}",
+    "action": "ignore",
+    "reason": "hint-without-id"
+  },
+  {
+    "name": "malformed JSON",
+    "line": "{\"v\":1,\"type\":\"hint\"",
+    "action": "ignore",
+    "reason": "unparseable"
+  },
+  {
+    "name": "blank line",
+    "line": "   ",
+    "action": "ignore",
+    "reason": "empty"
+  },
+  {
+    "name": "valid JSON that is not an object",
+    "line": "[1,2,3]",
+    "action": "ignore",
+    "reason": "not-an-object"
+  }
+]

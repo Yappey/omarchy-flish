@@ -5,6 +5,7 @@ import Quickshell.Hyprland
 import Quickshell.Wayland
 import qs.Commons
 import qs.Ui
+import "TutorProtocol.js" as TutorProtocol
 
 // The visible half of the tutor: one card, one question, two buttons.
 //
@@ -76,20 +77,17 @@ Item {
     return screenInfo && String(screenInfo.name || "") === root.targetScreen
   }
 
-  // Called by the shell host when summon() delivers a payload.
+  // Called by the shell host when summon() delivers a payload. Parsing and ttl
+  // normalisation live in TutorProtocol.js so they are testable without a shell.
   function open(payloadJson) {
-    var payload = {}
-    try {
-      payload = JSON.parse(payloadJson || "{}")
-    } catch (e) {
-      return
-    }
+    var hint = TutorProtocol.hintFromPayload(payloadJson)
+    if (!hint) return
 
-    root.hintId = String(payload.id || "")
-    root.hintTemplate = String(payload.template || "")
-    root.title = String(payload.title || "")
-    root.body = String(payload.body || "")
-    root.ttlMs = Number(payload.ttl_ms || 12000)
+    root.hintId = hint.id
+    root.hintTemplate = hint.template
+    root.title = hint.title
+    root.body = hint.body
+    root.ttlMs = hint.ttlMs
     root.verdict = ""
     root.targetScreen = root.resolveTargetScreen()
     root.opened = true
@@ -238,9 +236,7 @@ Item {
               visible: root.verdict !== ""
               Layout.fillWidth: true
               textFormat: Text.PlainText
-              text: root.verdict === "helpful"
-                ? "Glad that helped."
-                : "Thanks -- we will make it clearer."
+              text: TutorProtocol.acknowledgementText(root.verdict)
               color: Util.alpha(Color.popups.text, 0.85)
               font.family: Style.font.family
               font.pixelSize: root.bodySize

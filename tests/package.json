@@ -1,0 +1,14 @@
+{
+  "name": "omarchy-flish-tests",
+  "private": true,
+  "type": "module",
+  "description": "Automated tests for the Flish templates and tutor overlay.",
+  "scripts": {
+    "test": "node --test",
+    "test:templates": "node --test templates/",
+    "test:tutor": "node --test tutor/"
+  },
+  "devDependencies": {
+    "ajv": "^8.17.1"
+  }
+}

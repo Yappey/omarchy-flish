@@ -59,8 +59,13 @@ engine/build/omarchy-flish
 ### Tests
 
 ```bash
-engine/scripts/test.sh
+cd tests && npm install && npm test   # hint dictionary + tutor logic
+engine/scripts/test.sh                # engine (needs Odin)
+scripts/e2e-tutor.py                  # overlay end to end (needs a live shell)
 ```
+
+[`tests/README.md`](tests/README.md) covers the layers and the checks that still
+need a human looking at the screen.
 
 ### Install the tutor overlay
 

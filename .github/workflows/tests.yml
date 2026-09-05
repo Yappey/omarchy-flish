@@ -1,0 +1,23 @@
+# The Node layers only. The end-to-end checks in scripts/e2e-tutor.py need a
+# live Wayland session with omarchy-shell, so they stay a local pre-push step --
+# see tests/README.md.
+name: tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+jobs:
+  node:
+    name: templates + tutor logic
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+        working-directory: tests
+      - run: npm test
+        working-directory: tests

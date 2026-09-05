@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "TutorProtocol.js" as TutorProtocol
 
 // The tutor's listening half. See ../docs/ipc-protocol.md.
 //
@@ -63,35 +64,26 @@ Item {
 
   // ---------------------------------------------------------------- inbound
 
+  // Routing lives in TutorProtocol.classifyLine so the version and type rules
+  // are testable without a shell. Unknown types and unknown versions are
+  // ignored, never errors -- that is the forward-compatibility hinge for v1.x.
   function handleLine(socket, line) {
-    var text = String(line || "").trim()
-    if (text === "") return
+    var decision = TutorProtocol.classifyLine(line)
 
-    var message
-    try {
-      message = JSON.parse(text)
-    } catch (e) {
+    if (decision.reason === "unparseable")
       // A malformed line is the engine's bug, not the child's problem.
       console.warn("flish.tutor: unparseable IPC line")
-      return
-    }
 
-    // Forward compatibility: anything newer than this build understands, and
-    // any type it does not know, is ignored rather than treated as an error.
-    if (Number(message.v) !== 1) return
-
-    switch (message.type) {
-    case "hello":
-      return
+    switch (decision.action) {
     case "hint":
-      return root.showHint(socket, message)
+      return root.showHint(socket, decision.message)
     case "dismiss":
-      return root.dismiss(message)
+      return root.dismiss(decision.message)
     }
   }
 
   function showHint(socket, message) {
-    var id = String(message.id || "")
+    var id = TutorProtocol.hintIdOf(message)
     if (id === "") return
 
     root.currentHintId = id
@@ -104,8 +96,7 @@ Item {
   // id check, one child's terminal resetting would yank the hint another
   // terminal is still showing.
   function dismiss(message) {
-    var id = String(message.id || "")
-    if (id === "" || id !== root.currentHintId) return
+    if (!TutorProtocol.shouldDismiss(message, root.currentHintId)) return
     root.clearCurrent()
     if (root.shell) root.shell.hide("flish.tutor")
   }
@@ -123,24 +114,14 @@ Item {
   // engine tell "this hint did not help" apart from "this hint was never seen".
   function sendAck(hintId) {
     if (hintId !== root.currentHintId) return
-    root.send(root.currentSocket, {
-      v: 1,
-      type: "ack",
-      id: hintId,
-      rendered: true
-    })
+    root.send(root.currentSocket, TutorProtocol.ackPayload(hintId))
   }
 
   // Called by HintPanel.qml when the child taps a feedback button.
   function sendFeedback(hintId, verdict) {
     if (hintId !== root.currentHintId) return
-    root.send(root.currentSocket, {
-      v: 1,
-      type: "feedback",
-      id: hintId,
-      verdict: verdict,
-      at: new Date().toISOString()
-    })
+    root.send(root.currentSocket,
+      TutorProtocol.feedbackPayload(hintId, verdict, new Date().toISOString()))
   }
 
   function clearCurrent() {
