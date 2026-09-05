@@ -1,0 +1,45 @@
+# --- Odin build artifacts -------------------------------------------------
+# Anchored to the engine so a source file or directory that happens to share
+# the binary's name is never silently ignored.
+/engine/build/
+/engine/omarchy-flish
+/engine/omarchy-flish.bin
+*.o
+*.obj
+*.a
+*.lib
+*.dll
+*.so
+
+# Odin test binaries
+/engine/tests/tests
+/engine/tests/*.bin
+
+# --- Runtime state --------------------------------------------------------
+# These belong in $XDG_STATE_HOME/omarchy-flish, never in the checkout. They
+# are listed anyway so a stray dev run cannot commit a child's session data.
+telemetry.ndjson
+local_state.json
+state.json
+*.log
+
+# --- Telemetry fixtures ---------------------------------------------------
+# This is data from children. Nothing lands here by accident: a fixture that
+# has been redacted AND reviewed is added deliberately with `git add -f`.
+# Committing raw telemetry is the one mistake here a revert cannot undo.
+# See NOTICE.md.
+/tools/curate/fixtures/*
+!/tools/curate/fixtures/.gitkeep
+
+# --- OS / editor ----------------------------------------------------------
+.DS_Store
+.idea/
+*.swp
+*~
+
+# .vscode/ is intentionally NOT ignored: shared launch and task definitions
+# are useful here. Ignore only the per-user parts.
+.vscode/*
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
