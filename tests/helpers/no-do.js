@@ -44,6 +44,24 @@ export function findRunnableCommand(body) {
   if (/(^|\s)\$\s+\S/.test(text)) return "shell prompt marker ($)"
   if (text.includes("`")) return "backtick code formatting"
 
+  // A bare word is a perfectly good argument -- "ls caves" is a command line --
+  // but "cd walks into folders" is legitimate teaching prose with the same
+  // shape. What separates them is presentation: a command being handed over is
+  // quoted, or introduced by an instruction verb. Both are checked before the
+  // argument-shape rules below, because both are unambiguous.
+  const ALL_VERBS = [...HARD_VERBS, ...SOFT_VERBS].join("|")
+
+  const quoted = text.match(new RegExp(`["'\`]\\s*(${ALL_VERBS})\\s+\\S`))
+  if (quoted) return `"${quoted[1]}" quoted with an argument`
+
+  // One optional word between the instruction and the command, so "try running
+  // ls x" reads the same as "type ls x". Gerunds included; "used cd, but..." is
+  // still safe because a trailing comma fails the argument match.
+  const instructed = text.match(new RegExp(
+    `\\b(?:use|using|type|typing|run|running|enter|entering|try|trying|write|writing|execute|executing)`
+    + `\\s+(?:\\w+\\s+)?["'\`]?(${ALL_VERBS})\\s+\\S`, "i"))
+  if (instructed) return `"${instructed[1]}" handed over after an instruction to type it`
+
   for (const verb of HARD_VERBS) {
     if (new RegExp(`(^|[^\\w-])${verb}\\s+${ANY_ARG}`).test(text)) {
       return `"${verb}" followed by an argument`

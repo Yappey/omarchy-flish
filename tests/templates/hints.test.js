@@ -146,7 +146,10 @@ test("the No-Do predicate catches known violations", () => {
     "At the prompt: $ ls -la",
     "You could use ls -l here.",
     "find . -name secret_map.txt",
-    "touch ./notes.txt"
+    "touch ./notes.txt",
+    "If you want to see its contents, use 'ls caves'.",
+    "Try running ls treasure_island to look.",
+    "You could type cat notes and see."
   ]
   for (const v of violations) {
     assert.notEqual(findRunnableCommand(v), null, `should have been caught: ${v}`)
