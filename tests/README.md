@@ -138,20 +138,48 @@ across different context lengths or offload settings and those are set in the
 LM Studio UI rather than here. Seven candidates each, on `cat/Is_A_Directory`
 and `ls/Not_Found`:
 
-| Model | Reasoning | Passed | What it got wrong |
+| Model | Reasoning | Passed | Its characteristic failure |
 |---|---|---|---|
-| `gemma-4-26b-a4b-qat` | off | 7/7 | attached a decorator the lesson does not use |
-| `gemma-4-31b` | off | 7/7 | pointed the child at the wrong command |
-| `qwen3.6-35b-a3b` | off | 4/7 | wrote scenario filenames into the template |
-| `qwen3.8-27b` | off | 4/7 | ignored the JSON contract; one literal filename |
-| `nemotron-3-nano-4b` | on | 2/7 | explained instead of asking |
-| `nemotron-3-nano-4b` | off | 0/7 | explained instead of asking, every time |
+| `gemma-4-26b-a4b-qat` | off | 7/7 | a decorator the lesson does not use |
+| `gemma-4-31b` | off | 7/7 | points the child at the wrong command |
+| `qwen3.8-27b` | off | 5/7 * | prose where JSON belongs |
+| `qwen3.6-35b-a3b` | off | 4/7 | scenario filenames in the template |
+| `muse-glimmer` | low | 2/7 | scenario names, in five of seven |
+| `nemotron-3-nano-4b` | on | 2/7 | explains instead of asking |
+| `nemotron-3-nano-4b` | off | 0/7 | explains instead of asking, every time |
+
+Seven attempts each, three on `cat/Is_A_Directory` and four on `ls/Not_Found`,
+re-gated under the current rules rather than the rules in force when each ran.
+
+**Two caveats, both worth more than the ranking.**
+
+*The gate moved under the models.* `muse-glimmer` scored 3/3 on the cat slot when
+it ran and 1/3 an hour later, because it exposed the rule that then caught it.
+Every score here is "against this gate", and the gate got stricter five times
+during the benchmark. Re-gate saved candidates rather than trusting a number
+from an older run.
+
+*The starred row is contaminated.* `qwen3.8-27b`'s reasoning-on re-run
+overwrote part of its reasoning-off run before filenames carried the setting, so
+that row mixes two configurations. It is reported rather than quietly dropped;
+re-run it if the number matters.
 
 Deliberation is what gets a 4B model to ask a question instead of stating a
 fact; on the larger models it is pure latency.
 
-**Every model added to this comparison has exposed a different failure, and
-half of them turned out to be mechanical.** That is the argument for running a
+**Every model added to this comparison has exposed a gap, and most of the gaps
+were in the tooling rather than in the dictionary.** That is the argument for
+running a new model against a slot you have already covered:
+
+- `nemotron` — explaining instead of asking → the question-mark rule.
+- `qwen3.6` — scenario filenames in the body → the literal-filename rule.
+- `qwen3.8` — a generation that overran the timeout aborted the whole slot →
+  timeouts are now skipped, not fatal.
+- `muse-glimmer` — 400s on `reasoning: "off"`, which it does not support →
+  the setting is negotiated per model now; and it quoted directory names the
+  filename rule could not see → the scenario-name rule.
+
+Half the *copy* failures turned out mechanical. That is the argument for running a
 new model against a slot you have already covered rather than only against
 uncovered ones:
 
