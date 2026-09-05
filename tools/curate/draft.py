@@ -14,6 +14,14 @@ person moves them there -- see docs/decisions.md, D9.
     tools/curate/draft.py --slot cat/Is_A_Directory
     tools/curate/draft.py --slot cat/Not_Found -n 5 # 5 candidates, keep the ones that pass
     tools/curate/draft.py --all -n 3                # every uncovered slot
+    tools/curate/draft.py --models                  # what LM Studio has loaded
+
+By default this refuses to draft with a model LM Studio has not already loaded.
+Asking for an unloaded model can trigger a just-in-time load, and this tool
+loops -- over candidates, and with --all over every uncovered slot -- so an
+unattended run can pull several multi-gigabyte models into memory on a machine
+that cannot spare it. Load the model you want first, or pass --allow-jit if you
+know the box can take it.
 
 Candidate filenames carry the model, so drafting the same slot with two models
 leaves both sets side by side. Which model to author with is a real choice --
@@ -48,6 +56,14 @@ DEFAULT_HOST = os.environ.get("FLISH_LMSTUDIO", "http://127.0.0.1:1234")
 
 def load(path):
     return json.loads(path.read_text())
+
+
+def list_models(host, timeout=15):
+    """Every LLM LM Studio knows about, and whether an instance is loaded."""
+    with urllib.request.urlopen(f"{host}/api/v1/models", timeout=timeout) as resp:
+        payload = json.loads(resp.read())
+    return [(m["key"], bool(m.get("loaded_instances")))
+            for m in payload.get("models", []) if m.get("type") == "llm"]
 
 
 def uncovered_slots():
@@ -253,8 +269,21 @@ def main():
     ap.add_argument("-n", type=int, default=3, help="candidates per slot (default 3)")
     ap.add_argument("--reasoning", choices=["off", "on"], default="off",
                     help="model deliberation before answering (default off; see chat())")
+    ap.add_argument("--models", action="store_true", help="list LM Studio models and exit")
+    ap.add_argument("--allow-jit", action="store_true",
+                    help="draft with a model that is not loaded, letting LM Studio "
+                         "load it on demand. Off by default: this tool loops, so an "
+                         "unattended run could pull several large models into memory.")
     ap.add_argument("--show-input", action="store_true", help="print the model input and exit")
     args = ap.parse_args()
+
+    if args.models:
+        try:
+            for key, loaded in list_models(args.host):
+                print(f"{'LOADED  ' if loaded else '        '}{key}")
+        except (urllib.error.URLError, TimeoutError) as exc:
+            sys.exit(f"LM Studio unreachable at {args.host}: {exc}")
+        return 0
 
     todo = uncovered_slots()
 
@@ -276,7 +305,28 @@ def main():
         return 0
 
     if not args.model:
-        sys.exit("pass --model or set FLISH_MODEL (see: curl $FLISH_LMSTUDIO/api/v1/models)")
+        sys.exit("pass --model or set FLISH_MODEL (see --models)")
+
+    # Refuse to trigger a just-in-time load unless asked. This loops over
+    # candidates and, with --all, over slots; on a machine with JIT enabled an
+    # unattended run could quietly load several models at once.
+    if not args.allow_jit:
+        try:
+            models = list_models(args.host)
+        except (urllib.error.URLError, TimeoutError) as exc:
+            sys.exit(f"LM Studio unreachable at {args.host}: {exc}")
+
+        known = dict(models)
+        if args.model not in known:
+            sys.exit(f"LM Studio does not have {args.model!r}. See --models.")
+        if not known[args.model]:
+            loaded = [k for k, is_loaded in models if is_loaded]
+            sys.exit(
+                f"{args.model} is not loaded, and drafting it would ask LM Studio to "
+                f"load it on demand.\n"
+                f"Currently loaded: {', '.join(loaded) if loaded else '(nothing)'}\n"
+                f"Load it in LM Studio first, or pass --allow-jit if this machine can "
+                f"spare the memory.")
 
     total = sum(draft_slot(s, args) for s in todo)
     attempted = len(todo) * args.n

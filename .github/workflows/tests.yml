@@ -1,6 +1,12 @@
-# The Node layers only. The end-to-end checks in scripts/e2e-tutor.py need a
-# live Wayland session with omarchy-shell, so they stay a local pre-push step --
-# see tests/README.md.
+# The Node layers only: the hint dictionary, the slot manifest and the tutor's
+# protocol logic. The end-to-end checks in scripts/e2e-tutor.py need a live
+# Wayland session with omarchy-shell, so they stay a local pre-push step -- see
+# tests/README.md.
+#
+# Actions are pinned to the current majors. v4 targeted the Node 20 runtime,
+# which GitHub has deprecated; the runner was already forcing them onto Node 24
+# and warning about it.
+
 name: tests
 
 on:
@@ -13,10 +19,10 @@ jobs:
     name: templates + tutor logic
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version: '24'
       - run: npm install --no-audit --no-fund
         working-directory: tests
       - run: npm test

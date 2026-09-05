@@ -124,6 +124,13 @@ rejects are kept next to their reason. Survivors land in
 `tools/curate/candidates/` (gitignored) and reach `templates/hints/` only when a
 person moves one there.
 
+**Load the model you want before running this.** `draft.py` refuses to draft
+with a model LM Studio has not already loaded, because asking for an unloaded
+one can trigger a just-in-time load — and this tool loops, over candidates and
+(with `--all`) over every uncovered slot. An unattended run on a machine with
+JIT enabled could pull several multi-gigabyte models into memory. `--models`
+shows what is loaded; `--allow-jit` opts back in if the box can spare it.
+
 **Which model, and whether it deliberates, is measurable — so measure it.**
 Candidate filenames carry the model, so two models drafting the same slot leave
 both sets side by side. Seven candidates each, on `cat/Is_A_Directory` and

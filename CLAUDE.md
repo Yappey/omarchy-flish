@@ -17,6 +17,7 @@ node --test --test-name-pattern "No-Do"          # a single test
 scripts/e2e-tutor.py                 # end-to-end, needs a live shell (~25s)
 node tests/validate-candidate.js F   # gate one drafted hint (same rules as the suite)
 tools/curate/draft.py --list         # uncovered slots: the authoring worklist
+tools/curate/draft.py --models       # LM Studio models; drafting needs one LOADED
 
 engine/scripts/build.sh             # debug build -> engine/build/omarchy-flish
 engine/scripts/build.sh release     # -o:speed -no-bounds-check
@@ -182,7 +183,9 @@ Closest first-party references: `plugins/osd/` (transient summoned card),
 - **Hint dictionary covers 2 of 8 slots.** `tools/curate/draft.py --list` shows
   the rest. Drafting runs against a local LM Studio model and every candidate
   passes `tests/validate-candidate.js` before a human reads it; nothing reaches
-  `templates/hints/` without a person moving it (D9).
+  `templates/hints/` without a person moving it (D9). Drafting refuses an
+  unloaded model by default — it loops, and a just-in-time load of several large
+  models is not something to trigger unattended on someone else's hardware.
 - **Regex is unimplemented.** `match.stderr` is specified as a regex but
   compared as a substring; the `{{target}}` extraction wants named captures.
   Decide `core:text/regex` vs a PCRE2 binding (D2).
