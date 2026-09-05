@@ -85,7 +85,7 @@ test("no unknown placeholders", () => {
   }
 })
 
-import { findRunnableCommand, asksAQuestion } from "../helpers/no-do.js"
+import { findRunnableCommand, asksAQuestion, findLiteralFilename } from "../helpers/no-do.js"
 import { knownSlots, slotKeyOf } from "../helpers/dictionary.js"
 
 test("no hint body contains a runnable command line (No-Do)", () => {
@@ -103,6 +103,22 @@ test("every hint asks rather than tells", () => {
     assert.ok(asksAQuestion(data.body),
       `${file} contains no question mark, so it explains instead of asking:\n  ${data.body}`)
   }
+})
+
+test("no hint names a file literally instead of using {{target}}", () => {
+  for (const { file, data } of hints) {
+    const literal = findLiteralFilename(data.body)
+    assert.equal(literal, null,
+      `${file} names "${literal}" literally, so it would be wrong in every ` +
+      `scenario but the one it was written against:\n  ${data.body}`)
+  }
+})
+
+test("the literal-filename check tolerates ordinary punctuation", () => {
+  assert.equal(findLiteralFilename("It is a directory. What command lists it?"), null)
+  assert.equal(findLiteralFilename("Is {{target}} spelled correctly?"), null)
+  assert.equal(findLiteralFilename("You typed tresure_map.txt but meant another."), "tresure_map.txt")
+  assert.equal(findLiteralFilename("Did you mean secret_map.txt?"), "secret_map.txt")
 })
 
 test("the No-Do predicate catches known violations", () => {

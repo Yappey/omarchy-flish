@@ -15,7 +15,7 @@
 import { readFileSync } from "node:fs"
 import Ajv from "ajv/dist/2020.js"
 import { hintSchema, knownSlots, slotKey, slotKeyOf } from "./helpers/dictionary.js"
-import { findRunnableCommand, asksAQuestion } from "./helpers/no-do.js"
+import { findRunnableCommand, asksAQuestion, findLiteralFilename } from "./helpers/no-do.js"
 
 const arg = process.argv[2]
 if (!arg) {
@@ -67,6 +67,13 @@ if (!slot) {
 
 if (!asksAQuestion(candidate.body || "")) {
   problems.push("body states rather than asks: no question mark")
+}
+
+const literal = findLiteralFilename(candidate.body || "")
+if (literal) {
+  problems.push(
+    `body names the file "${literal}" literally; use {{target}} so the hint ` +
+    `works in every scenario`)
 }
 
 const runnable = findRunnableCommand(candidate.body || "")

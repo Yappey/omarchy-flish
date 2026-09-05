@@ -68,3 +68,23 @@ export function findRunnableCommand(body) {
 export function asksAQuestion(body) {
   return String(body).includes("?")
 }
+
+// A template ships to every world; a scenario's filenames belong to one. Copy
+// that names a file literally -- "you typed tresure_map.txt, but the file is
+// secret_map.txt" -- reads correctly against the scenario it was drafted from
+// and is wrong everywhere else, because the engine substitutes {{target}} and
+// nothing else.
+//
+// This is the failure a model falls into when the drafting input hands it a
+// concrete world, which it must, because copy written against no world at all
+// describes the error instead of the situation.
+//
+// Filename-shaped means word.ext with no space around the dot, so ordinary
+// sentence punctuation ("a directory. What command...") does not trip it.
+export function findLiteralFilename(body) {
+  const text = String(body)
+  // Blank out placeholders first: {{target}} is the correct way to say this.
+  const withoutPlaceholders = text.replace(/\{\{\s*[a-z_]+\s*\}\}/g, " ")
+  const m = withoutPlaceholders.match(/\b[\w-]+\.[A-Za-z]{1,5}\b/)
+  return m ? m[0] : null
+}

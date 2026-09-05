@@ -66,6 +66,29 @@ def list_models(host, timeout=15):
             for m in payload.get("models", []) if m.get("type") == "llm"]
 
 
+def instance_config(host, model, timeout=15):
+    """The runtime settings of the loaded instance, or None.
+
+    Pass rates are not comparable across different context lengths, offload
+    settings or expert counts, and those are set in the LM Studio UI rather than
+    here -- so a run that does not record them cannot be reproduced or fairly
+    compared against a later one. Recording it is cheap; re-running a benchmark
+    because nobody wrote down the conditions is not.
+    """
+    try:
+        with urllib.request.urlopen(f"{host}/api/v1/models", timeout=timeout) as resp:
+            payload = json.loads(resp.read())
+    except (urllib.error.URLError, TimeoutError):
+        return None
+    for m in payload.get("models", []):
+        if m.get("key") != model:
+            continue
+        for inst in m.get("loaded_instances") or []:
+            return {"max_context_length": m.get("max_context_length"),
+                    **(inst.get("config") or {})}
+    return None
+
+
 def uncovered_slots():
     """Slots the engine can produce that no template covers yet."""
     slots = load(SLOTS)["slots"]
@@ -331,6 +354,19 @@ def main():
                 f"Currently loaded: {', '.join(loaded) if loaded else '(nothing)'}\n"
                 f"Load it in LM Studio first, or pass --allow-jit if this machine can "
                 f"spare the memory.")
+
+    # Record the conditions alongside the candidates, so a comparison run months
+    # from now is not guesswork about how LM Studio was configured at the time.
+    config = instance_config(args.host, args.model)
+    if config:
+        interesting = ("context_length", "max_context_length", "flash_attention",
+                       "num_experts", "offload_kv_cache_to_gpu")
+        summary = "  ".join(f"{k}={config[k]}" for k in interesting if k in config)
+        print(f"{model_tag(args.model)}  reasoning={args.reasoning}  {summary}")
+        OUT.mkdir(parents=True, exist_ok=True)
+        (OUT / f"{model_tag(args.model)}.config.json").write_text(
+            json.dumps({"model": args.model, "reasoning": args.reasoning,
+                        "config": config}, indent=2) + "\n")
 
     total = sum(draft_slot(s, args) for s in todo)
     attempted = len(todo) * args.n

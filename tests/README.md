@@ -132,47 +132,50 @@ JIT enabled could pull several multi-gigabyte models into memory. `--models`
 shows what is loaded; `--allow-jit` opts back in if the box can spare it.
 
 **Which model, and whether it deliberates, is measurable — so measure it.**
-Candidate filenames carry the model, so two models drafting the same slot leave
-both sets side by side. Seven candidates each, on `cat/Is_A_Directory` and
-`ls/Not_Found`:
+Candidate filenames carry the model, and each run writes
+`<model>.config.json` next to them, because pass rates are not comparable
+across different context lengths or offload settings and those are set in the
+LM Studio UI rather than here. Seven candidates each, on `cat/Is_A_Directory`
+and `ls/Not_Found`:
 
-| Model | Reasoning | Passed | Notes |
+| Model | Reasoning | Passed | What it got wrong |
 |---|---|---|---|
-| `gemma-4-31b` | off | **7/7** | dense, slowest |
-| `gemma-4-26b-a4b-qat` | off | **7/7** | MoE, 4B active, ~6s each |
-| `nemotron-3-nano-4b` | on | 2/7 | minutes each |
-| `nemotron-3-nano-4b` | off | 0/7 | fast, unusable |
+| `gemma-4-26b-a4b-qat` | off | 7/7 | attached a decorator the lesson does not use |
+| `gemma-4-31b` | off | 7/7 | pointed the child at the wrong command |
+| `qwen3.6-35b-a3b` | off | 4/7 | wrote scenario filenames into the template |
+| `nemotron-3-nano-4b` | on | 2/7 | explained instead of asking |
+| `nemotron-3-nano-4b` | off | 0/7 | explained instead of asking, every time |
 
 Deliberation is what gets a 4B model to ask a question instead of stating a
-fact; on the larger models it is pure latency. The dominant failure at 4B is
-*explaining instead of asking*, which is why "the body contains a question mark"
-is a mechanical rule.
+fact; on the larger models it is pure latency.
 
-**Above 4B the gate stops discriminating, and the two big models fail in
-opposite directions.** On `cat/Is_A_Directory`:
+**Every model added to this comparison has exposed a different failure, and
+half of them turned out to be mechanical.** That is the argument for running a
+new model against a slot you have already covered rather than only against
+uncovered ones:
 
-- The 26B MoE attached `requires: {"target_is_empty_dir": true}` to all three
-  candidates while no body mentioned emptiness. The lesson holds for any
-  directory, so the decorator narrows it wrongly and inflates the specificity
-  score — the same error the coverage test catches in committed templates.
-- The 31B omitted `requires` on all three, which is correct. But two of its
-  three bodies point the child at *walking into* the folder, when they typed
-  `cat` because they wanted to see inside it. That teaches a wrong model of the
-  machine: you do not have to enter a directory to list it. The MoE's "which
-  command lists the contents inside a folder" answers what the child actually
-  wanted.
+- *Explaining instead of asking* (nemotron) → caught by the question-mark rule.
+- *Scenario filenames baked into the body* (qwen) → caught by the
+  literal-filename rule. A template ships to every world; a scenario's names
+  belong to one, so `"you typed tresure_map.txt, but the file is
+  secret_map.txt"` is right in the world it was drafted against and wrong
+  everywhere else. This is the failure a model falls into precisely because the
+  drafting input hands it a concrete world — which it must, or the copy
+  describes the error instead of the situation.
+- *A decorator the lesson does not use* (gemma 26B) → **not** mechanical. All
+  three of its `cat/Is_A_Directory` candidates required `target_is_empty_dir`
+  while no body mentioned emptiness. The lesson holds for any directory, so the
+  decorator narrows it wrongly and inflates the specificity score that decides
+  precedence.
+- *Pointing at the wrong command* (gemma 31B) → **not** mechanical. Two of its
+  three bodies asked whether the child needs to walk into the folder, when they
+  typed `cat` because they wanted to see inside it. You do not have to enter a
+  directory to list it, so the hint teaches a wrong model of the machine.
 
-So the bigger model has better structural judgement and the smaller one had
-better pedagogy on this slot. Neither is a safe default, and no rule in the gate
-distinguishes them.
-
-Both models correctly used `target_near_sibling` on `ls/Not_Found`, where the
-decorator is load-bearing — the body genuinely depends on a similar name being
-nearby.
-
-Several candidates for one slot will share an `id`, because the id is semantic
-and models converge on it. That is fine: you pick one. Committing two without
-renaming is caught by the uniqueness test.
+qwen's surviving `cat/Is_A_Directory` candidates were the best of the three
+large models on both judgement axes — correct decorator use *and* pointing at
+listing rather than entering — while also producing the only failure class that
+the gate could be taught to catch. Pass rate alone would have ranked it last.
 
 **The gate cannot check whether the copy is true, and that is the point of
 review.** Nemotron produced a structurally valid hint claiming `cat` reports a
