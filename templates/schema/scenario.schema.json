@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omarchy-flish.dev/schema/scenario.schema.json",
+  "title": "Omarchy Flish scenario",
+  "description": "The world a child lands in. Content, not code: editable without a compiler, and doubling as the fixture a hint's decorators are tested against. A hint that requires target_in_parent is only reachable in a scenario that has such a shape.",
+  "type": "object",
+  "required": ["schema_version", "id", "name", "cwd", "entries"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": 1 },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "Stable. Telemetry references it, so it is never reused for a different world."
+    },
+    "name": { "type": "string", "maxLength": 60 },
+    "description": { "type": "string", "maxLength": 240 },
+    "cwd": {
+      "type": "string",
+      "pattern": "^/",
+      "description": "Absolute path the child starts in. Must resolve to a directory in entries."
+    },
+    "entries": {
+      "type": "array",
+      "description": "The tree under /. Order is the order ls prints.",
+      "items": { "$ref": "#/$defs/entry" }
+    }
+  },
+  "$defs": {
+    "entry": {
+      "type": "object",
+      "required": ["name", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40,
+          "pattern": "^[^/]+$",
+          "description": "No slashes: nesting is expressed by entries, not by path."
+        },
+        "kind": { "enum": ["file", "dir"] },
+        "content": {
+          "type": "string",
+          "maxLength": 2000,
+          "description": "Files only. What cat prints."
+        },
+        "entries": {
+          "type": "array",
+          "description": "Directories only. An empty array is an empty room, which is a teachable shape.",
+          "items": { "$ref": "#/$defs/entry" }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "file" } }, "required": ["kind"] },
+          "then": { "not": { "required": ["entries"] } }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "dir" } }, "required": ["kind"] },
+          "then": { "not": { "required": ["content"] } }
+        }
+      ]
+    }
+  }
+}

@@ -62,17 +62,17 @@ test("hint ids are stable, lowercase, hyphenated", () => {
   }
 })
 
-// {{target}} renders empty unless the match/requires block guarantees there is
-// a target to substitute, which would ship a hint with a hole in the sentence.
-test("{{target}} is only used when the template establishes a target", () => {
+// {{target}} renders from outcome.argv[0]. On a slot with no target -- a bad
+// argument count, an unrecognised verb -- that is the empty string, so the hint
+// ships with a hole in the sentence. slots.json knows which slots have one.
+test("{{target}} is only used on slots that have a target", () => {
   for (const { file, data } of hints) {
     if (!String(data.body).includes("{{target}}")) continue
-    const requires = data.requires || {}
-    const establishesTarget =
-      Object.prototype.hasOwnProperty.call(requires, "target_exists") ||
-      Object.prototype.hasOwnProperty.call(requires, "target_is_file")
-    assert.ok(establishesTarget,
-      `${file} interpolates {{target}} but declares no requires.target_* decorator`)
+    const slot = knownSlots.get(slotKeyOf(data))
+    assert.ok(slot, `${file} targets an unknown slot`)
+    assert.ok(slot.has_target,
+      `${file} interpolates {{target}} but ${slotKeyOf(data)} has no target, ` +
+      `so it would render empty`)
   }
 })
 
@@ -85,57 +85,8 @@ test("no unknown placeholders", () => {
   }
 })
 
-// ----------------------------------------------------------------- the No-Do rule
-//
-// "Ask, never instruct": a hint must not contain a runnable command line,
-// because the child typing it is the entire lesson (templates/README.md rule 1,
-// docs/architecture.md section 2).
-//
-// The predicate deliberately distinguishes two things:
-//   - naming a command in prose            -> allowed  ("cd is for folders")
-//   - a verb followed by an argument       -> rejected ("cd .." / "cat notes.txt")
-// so the test enforces the rule without banning the vocabulary a hint needs to
-// teach with. Prompt markers and code formatting are rejected outright.
-//
-// A false positive here is the safe direction: it asks a human to look.
-
-// Commands whose names are not also ordinary English words. A bare verb plus
-// any argument-shaped token is a command line.
-const HARD_VERBS = [
-  "cd", "ls", "pwd", "mkdir", "rmdir", "rm", "mv", "cp", "cat", "grep", "chmod"
-]
-
-// Commands that double as everyday words -- "could not find x", "touch the
-// screen", "read more about it". Flagging these on any argument produces false
-// positives on ordinary hint prose, so they need a stronger signal: a flag, or
-// a path-shaped argument. `find {{target}}` is prose; `find . -name x` is not.
-const SOFT_VERBS = [
-  "find", "touch", "more", "less", "head", "tail", "clear", "man", "echo"
-]
-
-// Argument shapes. ANY covers a placeholder or a bare word that follows a hard
-// verb; PATHY is the narrower set that makes a soft verb unambiguous.
-const ANY_ARG = `(-{1,2}\\w|["'./~]|\\{\\{|\\w+\\.\\w|\\.\\.)`
-const PATHY_ARG = `(-{1,2}\\w|["'~]|\\.{1,2}/|/\\w|\\w+\\.\\w|\\.{1,2}(?=\\s|$))`
-
-export function findRunnableCommand(body) {
-  const text = String(body)
-
-  if (/(^|\s)\$\s+\S/.test(text)) return "shell prompt marker ($)"
-  if (text.includes("`")) return "backtick code formatting"
-
-  for (const verb of HARD_VERBS) {
-    if (new RegExp(`(^|[^\\w-])${verb}\\s+${ANY_ARG}`).test(text)) {
-      return `"${verb}" followed by an argument`
-    }
-  }
-  for (const verb of SOFT_VERBS) {
-    if (new RegExp(`(^|[^\\w-])${verb}\\s+${PATHY_ARG}`).test(text)) {
-      return `"${verb}" followed by a path or flag`
-    }
-  }
-  return null
-}
+import { findRunnableCommand, asksAQuestion } from "../helpers/no-do.js"
+import { knownSlots, slotKeyOf } from "../helpers/dictionary.js"
 
 test("no hint body contains a runnable command line (No-Do)", () => {
   for (const { file, data } of hints) {
@@ -147,6 +98,13 @@ test("no hint body contains a runnable command line (No-Do)", () => {
 
 // Guard the guard: if the predicate stops catching these, it is not doing
 // anything and the rule quietly stops being enforced.
+test("every hint asks rather than tells", () => {
+  for (const { file, data } of hints) {
+    assert.ok(asksAQuestion(data.body),
+      `${file} contains no question mark, so it explains instead of asking:\n  ${data.body}`)
+  }
+})
+
 test("the No-Do predicate catches known violations", () => {
   const violations = [
     "Try cd .. to go back up a level.",

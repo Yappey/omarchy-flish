@@ -5,10 +5,6 @@
     "command": "cd",
     "status": "Not_A_Directory"
   },
-  "requires": {
-    "target_exists": true,
-    "target_is_file": true
-  },
   "min_strike": 3,
   "title": "That is a file, not a folder",
   "body": "The terminal said \"Not a directory\". {{target}} is a thing you can read, not a room you can walk into. Which command shows you what is written inside something?",

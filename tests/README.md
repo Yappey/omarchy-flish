@@ -5,6 +5,8 @@ Three layers, split by what infrastructure each one needs.
 | Layer | Location | Needs | In CI |
 |---|---|---|---|
 | Hint dictionary | `templates/` | Node | yes |
+| Slot coverage + engine drift | `templates/` | Node | yes |
+| Scenarios | `templates/` | Node | yes |
 | Tutor protocol logic | `tutor/` | Node | yes |
 | Tutor end-to-end | `../scripts/e2e-tutor.py` | live Omarchy session | no |
 | Engine unit tests | `../engine/tests/` | Odin | when Odin is installed |
@@ -19,6 +21,17 @@ npm run test:templates
 npm run test:tutor
 node --test tutor/protocol.test.js         # one file
 node --test --test-name-pattern "No-Do"    # one test
+```
+
+Two of the tests print reports rather than asserting: `coverage report` lists the
+slots still needing hints, and `decorator reachability report` lists decorators
+no scenario can currently exercise. Both are worklists, and both are meant to be
+read in the test output rather than chased down separately.
+
+The gate that gets used outside the suite:
+
+```bash
+node tests/validate-candidate.js path/to/candidate.json   # exit 0 = worth reading
 ```
 
 Engine tests are separate and need the Odin compiler:
@@ -53,6 +66,26 @@ asserting known violations are caught, one asserting Socratic prose is not — s
 it cannot rot into a no-op. **A false positive is the safe direction:** it asks
 a human to look at the copy.
 
+### `templates/` — slots and scenarios
+
+A **slot** is one `(command, status)` pair: what `session.signature_of` keys
+strikes on, and therefore the unit that can earn a hint. `slots.json` enumerates
+every slot the engine can produce, and `slots.test.js` asserts the dictionary
+stays honest about it — no template for a slot the engine cannot produce, no
+decorator that the slot's status already implies (those discriminate nothing and
+only inflate the specificity score that decides precedence), and no two templates
+that tie on specificity while both matching the same failure.
+
+`slot-drift.test.js` parses `engine/src/commands/commands.odin` and fails when it
+disagrees with `slots.json`, so adding a command without declaring its failures
+breaks the build rather than silently leaving it uncoverable. It also fails on a
+status that is declared but never assigned — which is how the dead
+`Permission_Denied` was found.
+
+`scenarios.test.js` validates the worlds. Scenarios are hint fixtures as much as
+content: a hint requiring `target_in_parent` can only fire in a world shaped that
+way, so the two are authored together.
+
 ### `tutor/` — protocol logic
 
 QML types cannot load outside the Quickshell binary (`qmltestrunner` fails with
@@ -73,6 +106,31 @@ normalisation, payload shapes.
 expected classification. It is deliberately language-neutral so the engine side
 can be tested against the same bytes once its socket client exists — that is
 what keeps the two halves of the seam from drifting.
+
+## Drafting hints with a local model
+
+`tools/curate/draft.py` iterates uncovered slots and drafts candidates against an
+LM Studio server (default `http://127.0.0.1:1234`, override with
+`FLISH_LMSTUDIO`).
+
+```bash
+tools/curate/draft.py --list                          # the worklist
+tools/curate/draft.py --slot cat/Not_Found --show-input   # what the model sees
+tools/curate/draft.py --model <key> --slot cat/Not_Found -n 5
+```
+
+Every candidate goes through `validate-candidate.js` before it is written, and
+rejects are kept next to their reason. Survivors land in
+`tools/curate/candidates/` (gitignored) and reach `templates/hints/` only when a
+person moves one there.
+
+**Expect a low pass rate.** On a 4B model, 2 of 7 candidates survived the gate in
+the first run; the dominant failure by far is *explaining instead of asking*,
+which is why "body contains a question mark" is a mechanical rule. Generate 4-6
+per slot and read the survivors. The gate checks structure, No-Do and question
+form — it cannot tell you whether the explanation is **true**, and the first
+model output that passed structurally still claimed `cat` reports a directory
+"because there are no files to list", which is wrong. That is what review is for.
 
 ## Manual checks
 

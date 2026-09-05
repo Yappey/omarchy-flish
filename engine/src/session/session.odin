@@ -13,8 +13,15 @@ import "../commands"
 PROMPT :: "flish> "
 
 // Three strikes before a hint fires. Fewer feels like the app is answering for
-// them; more and they have already given up.
+// them; more and they have already given up. A template may raise its own bar
+// with min_strike; this is the default when it does not.
 STRIKE_THRESHOLD :: 3
+
+// Turns that must pass between two hints. Templates now fire at their own
+// min_strike rather than all at strike three, so a child who keeps failing can
+// legitimately earn a second, blunter hint later in the same run -- but they
+// must not arrive back to back.
+HINT_COOLDOWN_TURNS :: 2
 
 // A run of inputs that parse as nothing at all. Below this, a child is
 // experimenting; at it, they are mashing and the screen needs clearing.
@@ -37,6 +44,8 @@ State :: struct {
 	// Hints already shown this session, so the same one is not repeated at
 	// every subsequent strike.
 	shown:      map[string]bool,
+	// The turn a hint last fired on, for the cooldown. Zero means none yet.
+	last_hint_turn: int,
 }
 
 create :: proc() -> (state: State) {
@@ -86,11 +95,23 @@ record :: proc(state: ^State, line: string, outcome: commands.Outcome) {
 	state.strike.last_at = time.now()
 }
 
-// at_threshold reports whether this turn is the one that earns a hint. It is
-// true only on the turn the count reaches the threshold, not on every turn
-// after -- a child stuck for ten turns should not get ten popups.
-at_threshold :: proc(state: ^State) -> bool {
-	return state.strike.count == STRIKE_THRESHOLD
+// strike_count is what a template's min_strike is compared against.
+strike_count :: proc(state: ^State) -> int {
+	return state.strike.count
+}
+
+// can_hint keeps a child stuck for ten turns from collecting ten popups. The
+// old rule was "only on the exact turn the count hits three", which is simpler
+// but makes min_strike unusable: a template asking for five strikes would never
+// be evaluated. A cooldown gives the same protection while letting a later,
+// blunter template take its turn.
+can_hint :: proc(state: ^State) -> bool {
+	if state.last_hint_turn == 0 do return true
+	return state.turns - state.last_hint_turn >= HINT_COOLDOWN_TURNS
+}
+
+mark_hinted :: proc(state: ^State) {
+	state.last_hint_turn = state.turns
 }
 
 should_reset :: proc(state: ^State) -> bool {

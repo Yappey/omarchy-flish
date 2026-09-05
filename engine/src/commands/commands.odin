@@ -14,7 +14,6 @@ Status :: enum {
 	Not_Found,
 	Not_A_Directory,
 	Is_A_Directory,
-	Permission_Denied,
 	Unknown_Command,
 	Bad_Usage,
 }
@@ -104,9 +103,14 @@ cmd_ls :: proc(world: ^vfs.World, outcome: Outcome) -> Outcome {
 		}
 	}
 
-	// Real ls on a file prints the file's own name and exits 0. Matching that
-	// matters: a child who types `ls secret_map.txt` gets a confusing success,
-	// not an error, and that confusion is itself a hint trigger.
+	// Real ls on a file prints the file's own name and exits 0, and Flish
+	// matches that: authenticity is the point, and a child who types
+	// `ls secret_map.txt` should see what a real terminal would show them.
+	//
+	// This is deliberately NOT a hint trigger. Hints hang off strikes, and
+	// strikes only accumulate on failures, so a success has nothing to attach
+	// to. Teaching a child to distrust commands that worked would cost more
+	// than the moment of confusion here does.
 	if !vfs.is_dir(target) {
 		outcome.stdout = target.name
 		outcome.status = .Ok

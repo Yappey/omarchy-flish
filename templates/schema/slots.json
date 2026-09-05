@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "description": "Every failure the engine can produce, enumerated. A slot is one (command, status) pair -- the unit session.signature_of keys strikes on, and therefore the unit that can earn a hint. Decorators split one slot into several lessons; they never create new slots. This file is the worklist for authoring hints and the source of truth for the coverage test in tests/templates/. Adding a command means adding its slots here in the same change. A decorator implied by the status itself (target_exists on a Not_Found, target_is_file on a Not_A_Directory) is deliberately not listed: it discriminates nothing and only inflates the specificity score that decides precedence.",
+  "decorators": {
+    "target_exists": "The first argument resolves to a node in the VFS.",
+    "target_is_file": "The first argument resolves to a file rather than a directory.",
+    "cwd_has_children": "The directory the child is standing in contains anything at all.",
+    "target_near_sibling": "A sibling of the cwd has a name within edit distance 2 of what was typed -- the typo case.",
+    "target_in_parent": "The name that was not found here does exist one level up -- the wrong-room case.",
+    "cwd_is_root": "The child is at the top of the tree, so there is no further up to go.",
+    "target_is_empty_dir": "The first argument resolves to a directory with nothing in it.",
+    "argv_count": "How many arguments the verb was given. An integer, not a boolean."
+  },
+  "slots": [
+    {
+      "command": "cd",
+      "status": "Bad_Usage",
+      "stderr": "flish: cd: expected one folder name",
+      "has_target": false,
+      "concept": "argument count",
+      "applicable_decorators": [
+        "argv_count",
+        "cwd_has_children",
+        "cwd_is_root"
+      ]
+    },
+    {
+      "command": "cd",
+      "status": "Not_Found",
+      "stderr": "flish: cd: {target}: No such file or directory",
+      "has_target": true,
+      "concept": "the name does not exist here",
+      "applicable_decorators": [
+        "cwd_has_children",
+        "target_near_sibling",
+        "target_in_parent",
+        "cwd_is_root"
+      ]
+    },
+    {
+      "command": "cd",
+      "status": "Not_A_Directory",
+      "stderr": "flish: cd: {target}: Not a directory",
+      "has_target": true,
+      "concept": "file versus directory",
+      "applicable_decorators": [
+        "cwd_has_children",
+        "target_in_parent",
+        "cwd_is_root"
+      ]
+    },
+    {
+      "command": "ls",
+      "status": "Not_Found",
+      "stderr": "flish: ls: cannot access '{target}': No such file or directory",
+      "has_target": true,
+      "concept": "the name does not exist here",
+      "applicable_decorators": [
+        "cwd_has_children",
+        "target_near_sibling",
+        "target_in_parent",
+        "cwd_is_root"
+      ]
+    },
+    {
+      "command": "cat",
+      "status": "Bad_Usage",
+      "stderr": "flish: cat: expected one file name",
+      "has_target": false,
+      "concept": "argument count",
+      "applicable_decorators": [
+        "argv_count",
+        "cwd_has_children"
+      ]
+    },
+    {
+      "command": "cat",
+      "status": "Not_Found",
+      "stderr": "flish: cat: {target}: No such file or directory",
+      "has_target": true,
+      "concept": "the name does not exist here",
+      "applicable_decorators": [
+        "cwd_has_children",
+        "target_near_sibling",
+        "target_in_parent",
+        "cwd_is_root"
+      ]
+    },
+    {
+      "command": "cat",
+      "status": "Is_A_Directory",
+      "stderr": "flish: cat: {target}: Is a directory",
+      "has_target": true,
+      "concept": "directory versus file",
+      "applicable_decorators": [
+        "target_is_empty_dir",
+        "cwd_has_children",
+        "cwd_is_root"
+      ]
+    },
+    {
+      "command": "",
+      "status": "Unknown_Command",
+      "stderr": "flish: {target}: command not found",
+      "has_target": false,
+      "concept": "the verb itself is not a command",
+      "applicable_decorators": [
+        "cwd_has_children"
+      ],
+      "note": "command is empty because this slot matches any unrecognised verb. A template for it leaves match.command unset."
+    }
+  ]
+}

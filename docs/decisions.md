@@ -172,3 +172,73 @@ guarding in review:
 two-licence repository, which is mildly awkward to explain and unenforceable in
 the way a licence is. Accepted: the alternative is saying nothing, which reads
 as consent.
+
+## D11 — Template precedence is specificity, not directory order
+
+The dictionary is sorted at load: most conditions asserted wins, ties broken by
+`min_strike` then by id.
+
+**Why:** precedence used to fall out of `os.read_dir` order, because
+`evaluate` returns the first match. With two templates that never collided; at
+twenty it will, and the winner would depend on the filesystem. That makes "the
+same mistake always yields the same hint" — the D1 claim the product rests on —
+false in a way nobody would notice until a child got a different hint on a
+different machine.
+
+**Why specificity:** a template pinning the command, the status and two
+decorators is a narrower claim about the world than one pinning the command
+alone, and the narrower claim is the more considered lesson.
+
+**Cost:** specificity is a proxy. A template can now outrank a better one by
+declaring a decorator it does not need, which is why a decorator implied by the
+status (`target_exists` on a `Not_Found`) is excluded from the slot's
+applicable list and rejected by the tests. Both shipped templates were doing
+exactly this when the rule went in.
+
+## D12 — Two things the engine deliberately does not model
+
+**`Permission_Denied` is removed.** It sat in the `Status` enum from the start
+and nothing ever assigned it. Implementing it means ownership and mode bits on
+every node, and "you do not have permission" is a systems-administration
+lesson, not a how-files-work one. A locked-chest scenario is a better fit for
+7–12 and deserves its own status rather than borrowing POSIX semantics.
+
+**A successful command cannot fire a hint.** `ls secret_map.txt` prints the
+filename and exits 0, exactly as real `ls` does, and a comment used to claim
+that confusion was a hint trigger. It never could be: hints hang off strikes,
+strikes only accumulate on failures, so a success has nothing to attach to.
+Adding a parallel trigger would also teach a child to distrust commands that
+worked, which costs more than the moment of confusion does.
+
+**Cost:** the `ls`-on-a-file confusion is real and now goes unaddressed. It is a
+scenario-design problem — do not put a child in a position where that is their
+only move — rather than a hint-dictionary one.
+
+## D13 — A slot manifest, and authoring that starts before telemetry
+
+`templates/schema/slots.json` enumerates every `(command, status)` pair the
+engine can produce — the unit `session.signature_of` keys strikes on, and
+therefore the unit that can earn a hint. Decorators split a slot into lessons;
+they never create new slots.
+
+**Why:** it turns "write some hints" into a finite, checkable queue, and it is
+the input the drafting tool iterates over. It also makes coverage a test rather
+than a feeling: a template targeting a slot the engine cannot produce now fails
+CI, and a status declared but never assigned is caught (which is how the dead
+`Permission_Denied` surfaced).
+
+**Why hand-maintained:** it carries the concept and the applicable-decorator
+list for each slot, which no parser can derive. A drift test parses
+`commands.odin` and fails when the two disagree, so staleness is loud.
+
+**The bootstrap gap it closes:** `curate-template.md` generalises clusters of
+beta telemetry, so it cannot run until children have used the product.
+`author-slot.md` drafts from a slot plus a scenario instead, which means the
+dictionary can be populated first and the whole authoring loop — prompt, model,
+machine gate, human review — can be exercised locally with no child data in
+existence.
+
+**Cost:** adding a command is now three coordinated edits (the builtin, its
+slots, its hints) rather than one. That is the intended friction: `tokenize`
+already warns that every feature added is a concept a child can trip over, and
+a command shipped without hint coverage trips them with no help.

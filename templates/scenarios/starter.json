@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "id": "starter",
+  "name": "Treasure Island",
+  "description": "The world a child lands in on first run. Extracted verbatim from the hard-coded vfs.create_starter_world so behaviour is unchanged.",
+  "cwd": "/home",
+  "entries": [
+    {
+      "name": "home",
+      "kind": "dir",
+      "entries": [
+        {
+          "name": "treasure_island",
+          "kind": "dir",
+          "entries": [
+            {
+              "name": "secret_map.txt",
+              "kind": "file",
+              "content": "X marks the spot, three steps east of the palm.\n"
+            },
+            { "name": "caves", "kind": "dir", "entries": [] }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -15,11 +15,14 @@ to a desktop overlay that runs inside Omarchy 4's `omarchy-shell`.
 cd tests && npm install && npm test  # templates + tutor logic, ~70ms, no desktop
 node --test --test-name-pattern "No-Do"          # a single test
 scripts/e2e-tutor.py                 # end-to-end, needs a live shell (~25s)
+node tests/validate-candidate.js F   # gate one drafted hint (same rules as the suite)
+tools/curate/draft.py --list         # uncovered slots: the authoring worklist
 
 engine/scripts/build.sh             # debug build -> engine/build/omarchy-flish
 engine/scripts/build.sh release     # -o:speed -no-bounds-check
 engine/scripts/test.sh              # odin test tests
-export FLISH_TEMPLATES_DIR="$PWD/templates/hints"   # else /usr/share/omarchy-flish/...
+export FLISH_TEMPLATES_DIR="$PWD/templates/hints"    # else /usr/share/omarchy-flish/...
+export FLISH_SCENARIOS_DIR="$PWD/templates/scenarios" # the world; missing is fatal
 
 scripts/dev-install-tutor.sh        # validate + copy tutor/ into ~/.config/omarchy/plugins/
 omarchy plugin enable flish.tutor   # writes the shell.json entry for you
@@ -78,6 +81,27 @@ relevant entry before reversing one.
 Engine package graph is acyclic and fixed:
 `vfs → commands → session → hints → {ipc, telemetry}`, with `main` wiring them
 and owning a per-turn arena reset every REPL turn.
+
+### Slots: the unit of hint coverage
+
+`session.signature_of` keys strikes on `command/status`, not on the argument, so
+a **slot** is one `(command, status)` pair and is the unit that can earn a hint.
+Decorators (`requires`) split a slot into lessons; they never create new slots.
+
+`templates/schema/slots.json` enumerates every slot the engine can produce and is
+the authoring worklist. Adding a command means editing three things together: the
+builtin, its slots, and its hints. A drift test parses `commands.odin` and fails
+when the manifest disagrees, and a status declared but never assigned is caught
+(that is how the dead `Permission_Denied` surfaced).
+
+Precedence is **specificity, then min_strike, then id** — never directory order.
+A decorator the status already implies (`target_exists` on a `Not_Found`) is
+excluded from a slot's applicable list, because it discriminates nothing while
+still inflating the specificity score. See D11.
+
+The world is content too: `templates/scenarios/*.json`, loaded at startup and
+doubling as the fixture a hint's decorators are tested against. A hint requiring
+`target_in_parent` is only reachable in a scenario shaped that way.
 
 ### The IPC seam
 
@@ -155,6 +179,10 @@ Closest first-party references: `plugins/osd/` (transient summoned card),
 - **Engine IPC is a stub.** `core:net` has no AF_UNIX type, so `ipc.connect`
   always returns disconnected and the engine runs permanently degraded. Needs
   `core:sys/linux`. This is why `scripts/fake-engine.py` exists.
+- **Hint dictionary covers 2 of 8 slots.** `tools/curate/draft.py --list` shows
+  the rest. Drafting runs against a local LM Studio model and every candidate
+  passes `tests/validate-candidate.js` before a human reads it; nothing reaches
+  `templates/hints/` without a person moving it (D9).
 - **Regex is unimplemented.** `match.stderr` is specified as a regex but
   compared as a substring; the `{{target}}` extraction wants named captures.
   Decide `core:text/regex` vs a PCRE2 binding (D2).

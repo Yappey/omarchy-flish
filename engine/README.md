@@ -39,6 +39,20 @@ heap allocator and is explicitly freed.
 If a turn ever needs more than `TURN_ARENA_SIZE`, that is a bug in a command,
 not a reason to grow the arena.
 
+## Scenarios
+
+The world is content, loaded from `templates/scenarios/starter.json` rather than
+built in code. `FLISH_SCENARIOS_DIR` overrides the lookup the same way
+`FLISH_TEMPLATES_DIR` does:
+
+```bash
+export FLISH_SCENARIOS_DIR="$PWD/templates/scenarios"
+```
+
+A missing scenario is fatal, unlike a missing tutor socket: hints are an
+enhancement, but there is no product without a world, so the engine exits rather
+than substituting an empty island a child would have to puzzle over.
+
 ## Status: scaffolding, not yet compiled
 
 Odin is **not installed on this machine**, so none of the `.odin` files here
@@ -54,6 +68,9 @@ The calls most likely to need adjustment against the installed Odin version:
 | `src/commands/commands.odin` | `strings.fields` | return arity, allocator parameter |
 | `src/hints/hints.odin` | `os.read_dir` | allocator parameter; `File_Info.fullpath` |
 | `src/hints/hints.odin` | `json.unmarshal` into `Maybe(bool)` | optional-field decoding may need a custom path |
+| `src/hints/hints.odin` | `slice.sort_by` | comparator signature; `[dynamic]T` to slice |
+| `src/vfs/vfs.odin` | `json.unmarshal` into a recursive `[]Scenario_Entry` | self-referencing slice decoding |
+| `src/main.odin` | `filepath.join`, `os.exit` | slice-literal argument form |
 | `src/ipc/ipc.odin` | none — Unix sockets are unimplemented | see below |
 | `src/telemetry/telemetry.odin` | `os.get_env`, `os.make_directory` | return arity, mode argument |
 
@@ -69,7 +86,5 @@ The calls most likely to need adjustment against the installed Odin version:
    extraction wants; confirm support before committing.
 3. **Line editing.** `read_line` is a raw `os.read`. It needs history, arrow
    keys, and the keystroke-level hook that feeds mash detection.
-4. **Starter world.** Hard-coded in `vfs.create_starter_world`. It is content,
-   not code, and belongs in a scenario file.
-5. **Mash thresholds.** The heuristic in `session.looks_like_mashing` is a
+4. **Mash thresholds.** The heuristic in `session.looks_like_mashing` is a
    guess and must be tuned against real telemetry before shipping.

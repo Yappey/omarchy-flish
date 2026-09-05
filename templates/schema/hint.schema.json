@@ -4,64 +4,100 @@
   "title": "Omarchy Flish hint template",
   "description": "One parameterized Socratic hint, written and approved by a person. Never generated at runtime.",
   "type": "object",
-  "required": ["schema_version", "id", "match", "title", "body"],
+  "required": [
+    "schema_version",
+    "id",
+    "match",
+    "title",
+    "body"
+  ],
   "additionalProperties": false,
   "properties": {
-    "schema_version": { "const": 1 },
-
+    "schema_version": {
+      "const": 1
+    },
     "id": {
       "type": "string",
       "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
       "description": "Stable, human-readable. Telemetry references it, so it is never reused for different copy."
     },
-
     "match": {
       "type": "object",
       "description": "All present conditions must hold. An absent condition is not checked.",
       "additionalProperties": false,
       "properties": {
-        "command": { "type": "string", "description": "Exact verb, e.g. 'cd'." },
+        "command": {
+          "type": "string",
+          "description": "Exact verb, e.g. 'cd'."
+        },
         "status": {
           "type": "string",
           "enum": [
             "Not_Found",
             "Not_A_Directory",
             "Is_A_Directory",
-            "Permission_Denied",
             "Unknown_Command",
             "Bad_Usage"
           ]
         },
-        "stderr": { "type": "string", "description": "Regex over the authentic error line." }
+        "stderr": {
+          "type": "string",
+          "description": "Regex over the authentic error line."
+        }
       }
     },
-
     "requires": {
       "type": "object",
       "description": "VFS state decorators. These are what separate two failures that print the same error but teach different lessons.",
       "additionalProperties": false,
       "properties": {
-        "target_exists": { "type": "boolean" },
-        "target_is_file": { "type": "boolean" },
-        "cwd_has_children": { "type": "boolean" }
+        "target_exists": {
+          "type": "boolean"
+        },
+        "target_is_file": {
+          "type": "boolean"
+        },
+        "cwd_has_children": {
+          "type": "boolean"
+        },
+        "target_near_sibling": {
+          "type": "boolean",
+          "description": "A sibling name is within edit distance 2 of what was typed. The typo case, and the one most worth separating from a plain miss."
+        },
+        "target_in_parent": {
+          "type": "boolean",
+          "description": "The name that was not found here exists one level up. The wrong-room case."
+        },
+        "cwd_is_root": {
+          "type": "boolean",
+          "description": "The child is at the top of the tree, so there is no further up to go."
+        },
+        "target_is_empty_dir": {
+          "type": "boolean",
+          "description": "The target is a directory with nothing in it."
+        },
+        "argv_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Exact argument count. Separates 'you gave none' from 'you gave three', which are different lessons at the same status."
+        }
       }
     },
-
     "min_strike": {
       "type": "integer",
       "minimum": 1,
       "default": 3,
-      "description": "Consecutive same-signature failures before this may fire."
+      "description": "Consecutive same-signature failures before this may fire. The engine fires the most specific matching template whose min_strike is met, so a higher value is how a second, blunter hint is held back until the first has not worked."
     },
-
-    "title": { "type": "string", "maxLength": 60 },
-
+    "title": {
+      "type": "string",
+      "maxLength": 60
+    },
     "body": {
       "type": "string",
       "maxLength": 240,
       "description": "Socratic. Must ask, never instruct. Must NOT contain a runnable command line -- the child types the answer, the tutor does not supply it. Supports {{target}}."
     },
-
     "ttl_ms": {
       "type": "integer",
       "minimum": 0,

@@ -11,6 +11,7 @@ package main
 import "core:fmt"
 import "core:mem"
 import "core:os"
+import "core:path/filepath"
 
 import "commands"
 import "hints"
@@ -34,7 +35,20 @@ run :: proc() -> (exit_code: u8) {
 	turn_arena: mem.Arena
 	mem.arena_init(&turn_arena, turn_backing)
 
-	world := vfs.create_starter_world()
+	// The world is content now, not code. A missing scenario is a packaging
+	// bug, and there is no product without a world, so this fails loudly rather
+	// than substituting an empty island a child would have to puzzle over.
+	scenario_dir := vfs.scenario_dir()
+	defer delete(scenario_dir)
+	scenario_path := filepath.join({scenario_dir, "starter.json"})
+	defer delete(scenario_path)
+
+	world, world_ok := vfs.load_scenario(scenario_path)
+	if !world_ok {
+		fmt.eprintfln("flish: could not load scenario: %s", scenario_path)
+		fmt.eprintln("flish: set FLISH_SCENARIOS_DIR to a directory holding starter.json")
+		os.exit(2)
+	}
 	defer vfs.destroy(&world)
 
 	state := session.create()

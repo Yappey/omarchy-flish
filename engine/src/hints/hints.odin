@@ -9,6 +9,7 @@ import "core:encoding/json"
 import "core:fmt"
 import "core:os"
 import "core:path/filepath"
+import "core:slice"
 import "core:strings"
 
 import "../commands"
@@ -39,9 +40,14 @@ Matcher :: struct {
 // separates "you typed cd at a file" from "you typed cd at nothing", which are
 // the same error string but different lessons.
 Decorator :: struct {
-	target_exists: Maybe(bool),
-	target_is_file: Maybe(bool),
-	cwd_has_children: Maybe(bool),
+	target_exists:       Maybe(bool),
+	target_is_file:      Maybe(bool),
+	cwd_has_children:    Maybe(bool),
+	target_near_sibling: Maybe(bool),
+	target_in_parent:    Maybe(bool),
+	cwd_is_root:         Maybe(bool),
+	target_is_empty_dir: Maybe(bool),
+	argv_count:          Maybe(int),
 }
 
 Template :: struct {
@@ -78,6 +84,45 @@ load_dictionary :: proc() -> (dictionary: Dictionary) {
 		if filepath.ext(entry.name) != ".json" do continue
 		load_file(&dictionary, entry.fullpath)
 	}
+
+	// Precedence must not depend on the order the filesystem handed back, or
+	// the same mistake yields different hints on different machines and D1 --
+	// the determinism the whole product rests on -- quietly stops being true.
+	slice.sort_by(dictionary.templates[:], template_precedes)
+	return
+}
+
+// template_precedes orders the dictionary most-specific first, so the template
+// that makes the strongest claim about the world wins when several match.
+//
+// Ties break on id: arbitrary, but stable everywhere, which is the property
+// that actually matters. Two templates tying on both is a dictionary bug and is
+// caught by the ambiguity test in tests/templates/.
+@(private)
+template_precedes :: proc(a, b: Template) -> bool {
+	sa, sb := specificity(a), specificity(b)
+	if sa != sb do return sa > sb
+	if a.min_strike != b.min_strike do return a.min_strike < b.min_strike
+	return a.id < b.id
+}
+
+// specificity counts the conditions a template asserts. Pinning the command,
+// the status and two decorators is a narrower claim than pinning the command
+// alone, and the narrower claim is the more considered lesson.
+@(private)
+specificity :: proc(template: Template) -> (score: int) {
+	if template.match.command != "" do score += 1
+	if template.match.status != "" do score += 1
+	if template.match.stderr != "" do score += 1
+
+	if _, ok := template.requires.target_exists.?; ok do score += 1
+	if _, ok := template.requires.target_is_file.?; ok do score += 1
+	if _, ok := template.requires.cwd_has_children.?; ok do score += 1
+	if _, ok := template.requires.target_near_sibling.?; ok do score += 1
+	if _, ok := template.requires.target_in_parent.?; ok do score += 1
+	if _, ok := template.requires.cwd_is_root.?; ok do score += 1
+	if _, ok := template.requires.target_is_empty_dir.?; ok do score += 1
+	if _, ok := template.requires.argv_count.?; ok do score += 1
 	return
 }
 
@@ -98,14 +143,20 @@ evaluate :: proc(
 	hint: Hint,
 	matched: bool,
 ) {
-	if !session.at_threshold(state) do return
 	if outcome.status == .Ok do return
+	if !session.can_hint(state) do return
 
+	strikes := session.strike_count(state)
+
+	// The dictionary is sorted most-specific-first at load, so the first
+	// template that matches and has earned its strikes is the right one.
 	for template in dictionary.templates {
+		if strikes < template.min_strike do continue
 		if session.already_shown(state, template.id) do continue
 		if !matches(template, world, outcome) do continue
 
 		session.mark_shown(state, template.id)
+		session.mark_hinted(state)
 		return render(template, state, outcome), true
 	}
 	return
@@ -131,9 +182,13 @@ matches :: proc(template: Template, world: ^vfs.World, outcome: commands.Outcome
 
 @(private)
 satisfies :: proc(requires: Decorator, world: ^vfs.World, outcome: commands.Outcome) -> bool {
+	// Both forms are needed: the resolved node answers "what is it", the raw
+	// text answers "what did they type", and a near-miss has no node at all.
+	name: string
 	target: ^vfs.Node
 	if len(outcome.argv) > 0 {
-		target = vfs.resolve(world, world.cwd, outcome.argv[0])
+		name = outcome.argv[0]
+		target = vfs.resolve(world, world.cwd, name)
 	}
 
 	if want, ok := requires.target_exists.?; ok {
@@ -144,6 +199,21 @@ satisfies :: proc(requires: Decorator, world: ^vfs.World, outcome: commands.Outc
 	}
 	if want, ok := requires.cwd_has_children.?; ok {
 		if (len(world.cwd.children) > 0) != want do return false
+	}
+	if want, ok := requires.target_near_sibling.?; ok {
+		if vfs.has_near_sibling(world.cwd, name) != want do return false
+	}
+	if want, ok := requires.target_in_parent.?; ok {
+		if vfs.exists_in_parent(world.cwd, name) != want do return false
+	}
+	if want, ok := requires.cwd_is_root.?; ok {
+		if vfs.is_root(world, world.cwd) != want do return false
+	}
+	if want, ok := requires.target_is_empty_dir.?; ok {
+		if vfs.is_empty_dir(target) != want do return false
+	}
+	if want, ok := requires.argv_count.?; ok {
+		if len(outcome.argv) != want do return false
 	}
 	return true
 }
@@ -188,6 +258,11 @@ load_file :: proc(dictionary: ^Dictionary, path: string) {
 	if json.unmarshal(data, &template) != nil do return
 	if template.schema_version != 1 do return
 	if template.id == "" do return
+
+	// The schema documents a default of 3, but json.unmarshal leaves an absent
+	// field at zero -- which would fire every such template on the first
+	// failure, before the child has had a chance to work it out themselves.
+	if template.min_strike <= 0 do template.min_strike = session.STRIKE_THRESHOLD
 
 	append(&dictionary.templates, template)
 }

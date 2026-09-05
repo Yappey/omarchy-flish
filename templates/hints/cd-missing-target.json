@@ -6,7 +6,6 @@
     "status": "Not_Found"
   },
   "requires": {
-    "target_exists": false,
     "cwd_has_children": true
   },
   "min_strike": 3,

@@ -5,6 +5,8 @@ package vfs
 // filesystem, and there must never be one. That property is the entire safety
 // argument for the product, so it is worth guarding in review.
 
+import "core:encoding/json"
+import "core:os"
 import "core:strings"
 
 Node_Kind :: enum {
@@ -25,21 +27,72 @@ World :: struct {
 	cwd:  ^Node,
 }
 
-// create_starter_world builds the world a child lands in on first run.
-//
-// TODO: this is a placeholder shape. The real starter world is content, not
-// code, and should be loaded from a scenario file so it can be edited without
-// a rebuild.
-create_starter_world :: proc() -> (world: World) {
+// ------------------------------------------------------------------ scenarios
+
+// The on-disk shape of templates/schema/scenario.schema.json. The world is
+// content, not code: a scenario author edits JSON and needs no compiler, and
+// the same file doubles as the fixture a hint's decorators are tested against.
+Scenario_Entry :: struct {
+	name:    string,
+	kind:    string, // "file" | "dir"
+	content: string, // files only
+	entries: []Scenario_Entry, // directories only
+}
+
+Scenario :: struct {
+	schema_version: int,
+	id:             string,
+	name:           string,
+	description:    string,
+	cwd:            string,
+	entries:        []Scenario_Entry,
+}
+
+// scenario_dir resolves where shipped scenarios live, mirroring the templates
+// lookup in hints.dictionary_dir.
+scenario_dir :: proc(allocator := context.allocator) -> string {
+	if override := os.get_env("FLISH_SCENARIOS_DIR", allocator); override != "" {
+		return override
+	}
+	return strings.clone("/usr/share/omarchy-flish/templates/scenarios", allocator)
+}
+
+// load_scenario builds a world from a scenario file. Unlike a missing tutor
+// socket, a missing world is not a degraded mode: there is no product without
+// one, so the caller is expected to fail loudly rather than substitute
+// something. That keeps a packaging mistake from reaching a child as a
+// mysteriously empty island.
+load_scenario :: proc(path: string) -> (world: World, ok: bool) {
+	data, read_ok := os.read_entire_file(path)
+	if !read_ok do return
+	defer delete(data)
+
+	scenario: Scenario
+	if json.unmarshal(data, &scenario) != nil do return
+	if scenario.schema_version != 1 do return
+
 	world.root = make_node("/", .Directory)
+	build_entries(world.root, scenario.entries)
 
-	home := add_dir(world.root, "home")
-	treasure := add_dir(home, "treasure_island")
-	add_file(treasure, "secret_map.txt", "X marks the spot, three steps east of the palm.\n")
-	add_dir(treasure, "caves")
+	start := resolve(&world, world.root, scenario.cwd)
+	if start == nil || !is_dir(start) {
+		destroy(&world)
+		return
+	}
+	world.cwd = start
+	return world, true
+}
 
-	world.cwd = home
-	return
+@(private)
+build_entries :: proc(parent: ^Node, entries: []Scenario_Entry) {
+	for entry in entries {
+		if entry.kind == "dir" {
+			dir := add_dir(parent, entry.name)
+			build_entries(dir, entry.entries)
+		} else {
+			add_file(parent, entry.name, entry.content)
+		}
+	}
 }
 
 destroy :: proc(world: ^World) {
@@ -86,6 +139,70 @@ find_child :: proc(dir: ^Node, name: string) -> ^Node {
 
 is_dir :: proc(node: ^Node) -> bool {
 	return node != nil && node.kind == .Directory
+}
+
+is_empty_dir :: proc(node: ^Node) -> bool {
+	return is_dir(node) && len(node.children) == 0
+}
+
+is_root :: proc(world: ^World, node: ^Node) -> bool {
+	return node != nil && node == world.root
+}
+
+// --------------------------------------------------------------- decorators
+//
+// Questions about the world at the moment of failure. These are what let two
+// failures that print the same error be two different lessons -- see
+// templates/schema/hint.schema.json.
+
+// has_near_sibling reports whether `dir` holds a name that is a plausible typo
+// of `name`. This is the difference between "that does not exist" and "you
+// almost had it", which for a 7-12 year old are not the same problem at all.
+//
+// Distance 1 for short names, 2 for longer ones: on a four-letter name, two
+// edits is most of the word and stops being a typo.
+has_near_sibling :: proc(dir: ^Node, name: string) -> bool {
+	if !is_dir(dir) || name == "" do return false
+	limit := len(name) <= 4 ? 1 : 2
+
+	for child in dir.children {
+		if child.name == name do continue
+		if edit_distance(child.name, name) <= limit do return true
+	}
+	return false
+}
+
+// exists_in_parent reports whether the name the child asked for is one level
+// up: they are in the wrong room, not chasing something imaginary.
+exists_in_parent :: proc(dir: ^Node, name: string) -> bool {
+	if dir == nil || dir.parent == nil || name == "" do return false
+	return find_child(dir.parent, name) != nil
+}
+
+// edit_distance is plain Levenshtein over bytes. Scenario names are ASCII by
+// schema, and the two rows are temp-allocated so the turn arena reclaims them.
+edit_distance :: proc(a, b: string) -> int {
+	la, lb := len(a), len(b)
+	if la == 0 do return lb
+	if lb == 0 do return la
+
+	prev := make([]int, lb + 1, context.temp_allocator)
+	curr := make([]int, lb + 1, context.temp_allocator)
+	for j in 0 ..= lb do prev[j] = j
+
+	for i in 1 ..= la {
+		curr[0] = i
+		for j in 1 ..= lb {
+			cost := a[i - 1] == b[j - 1] ? 0 : 1
+
+			best := prev[j] + 1
+			if curr[j - 1] + 1 < best do best = curr[j - 1] + 1
+			if prev[j - 1] + cost < best do best = prev[j - 1] + cost
+			curr[j] = best
+		}
+		copy(prev, curr)
+	}
+	return prev[lb]
 }
 
 // path_of renders an absolute path for a node. The caller owns the result.
