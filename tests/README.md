@@ -182,11 +182,25 @@ and for a model that thinks inline it can be actively wrong**, the mirror of the
 nemotron result. Check both settings for any new model rather than inheriting
 the default.
 
+Turning reasoning back **on** for it does fix the contract adherence — the first
+candidate came back as valid JSON, passed the gate, and used `{{target}}`
+correctly where the off-run had answered in prose. It also took **about seven
+minutes for that one candidate**, against seconds for the off runs. So the
+setting that fixes its output also makes it impractical for bulk drafting on a
+dense 27B; the fix and the cost arrive together.
+
 It also made the best decorator judgement so far. Two of its three
 `cat/Is_A_Directory` candidates declared `target_is_empty_dir` *and* leaned on
 it in the copy ("Since it is empty...", "see what's inside an empty folder").
 That is the decorator earning its place, which is what the gemma 26B failed to
 do while declaring the same field.
+
+**Where that leaves model choice.** `qwen3.6-35b-a3b` looks like the best
+default: MoE, so it is fast; the strongest `cat/Is_A_Directory` judgement of any
+model tried; and its one failure class — scenario filenames — is now caught by
+the gate rather than by a reader. `gemma-4-26b-a4b-qat` is the throughput
+option, at the cost of a decorator defect that only a person will catch. Neither
+7/7 model is the obvious pick, which is the point.
 
 qwen's surviving `cat/Is_A_Directory` candidates were the best of the three
 large models on both judgement axes — correct decorator use *and* pointing at

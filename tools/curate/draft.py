@@ -259,7 +259,12 @@ def draft_slot(slot, args):
 
         text = message_text(response)
         candidate = extract_json(text)
-        stem = f'{key.replace("/", "-").replace("*", "any")}.{model_tag(args.model)}' 
+        # The reasoning setting is part of the run's identity, not a detail:
+        # drafting the same slot with it on and off is exactly the comparison
+        # worth making, and without it in the name the second run silently
+        # overwrites the first.
+        stem = (f'{key.replace("/", "-").replace("*", "any")}'
+                f'.{model_tag(args.model)}.r-{args.reasoning}')
 
         if candidate is None:
             print(f"  [{i}] no JSON in the reply")
@@ -364,7 +369,7 @@ def main():
         summary = "  ".join(f"{k}={config[k]}" for k in interesting if k in config)
         print(f"{model_tag(args.model)}  reasoning={args.reasoning}  {summary}")
         OUT.mkdir(parents=True, exist_ok=True)
-        (OUT / f"{model_tag(args.model)}.config.json").write_text(
+        (OUT / f"{model_tag(args.model)}.r-{args.reasoning}.config.json").write_text(
             json.dumps({"model": args.model, "reasoning": args.reasoning,
                         "config": config}, indent=2) + "\n")
 
