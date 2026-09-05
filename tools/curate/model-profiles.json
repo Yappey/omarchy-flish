@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "description": "Per-model settings taken from published model cards, plus a note on whether the model suits this task at all. draft.py matched every model on LM Studio's defaults before this existed, which is not what any of these cards recommend -- so the benchmark was partly measuring the defaults. Keys are matched as a prefix of the LM Studio model key.",
+  "defaults": {
+    "note": "Used when no profile matches. Conservative, and deliberately not tuned to any one family.",
+    "sampling": {
+      "temperature": 0.7,
+      "top_p": 0.9
+    }
+  },
+  "profiles": [
+    {
+      "match": "google/gemma-4",
+      "name": "Gemma 4 (26B-A4B MoE, 31B dense)",
+      "sampling": {
+        "temperature": 1.0,
+        "top_p": 0.95,
+        "top_k": 64
+      },
+      "suitability": "good",
+      "notes": "Card lists content creation and education among intended uses, which is this task. Google recommends temperature 1.0 across use cases and warns the family behaves oddly at low temperatures, so the instinct to drop it for structured output is wrong here.",
+      "source": "https://ai.google.dev/gemma/docs/core/model_card_4"
+    },
+    {
+      "match": "qwen/qwen3.6",
+      "name": "Qwen3.6 (35B-A3B MoE)",
+      "sampling": {
+        "temperature": 0.7,
+        "top_p": 0.8,
+        "top_k": 20,
+        "presence_penalty": 1.5
+      },
+      "suitability": "good",
+      "notes": "Card gives different parameters per mode and task type rather than per use case. These are the instruct/non-thinking general-task values, which is what drafting with reasoning off is. The presence_penalty of 1.5 is unusually high and is the card's own recommendation.",
+      "source": "https://huggingface.co/Qwen/Qwen3.6-35B-A3B"
+    },
+    {
+      "match": "qwen/qwen3.8",
+      "name": "Qwen3.8 (27B dense, qwen35 arch with MTP)",
+      "sampling": {
+        "temperature": 0.7,
+        "top_p": 0.8,
+        "top_k": 20
+      },
+      "suitability": "good",
+      "notes": "LM Studio reports its architecture as qwen35 with multi-token prediction, the same family as qwen3.6-35b-a3b, so the Qwen3.6 non-thinking general-task parameters are inherited on that basis rather than read from a 3.8 card directly. Confirm against its own card when one is available.",
+      "source": "https://huggingface.co/Qwen/Qwen3.6-27B/discussions/10"
+    },
+    {
+      "match": "nvidia/nemotron-3",
+      "name": "Nemotron 3 Nano 4B",
+      "sampling": {
+        "temperature": 0.6,
+        "top_p": 0.95
+      },
+      "suitability": "marginal",
+      "notes": "General-purpose reasoning and chat, hybrid Mamba2-Transformer, with a reasoning toggle and an inference-time thinking budget. Emits <think>/</think>, which is why the reply parser strips them. At 4B it produced usable copy only with reasoning on.",
+      "source": "https://huggingface.co/blog/nvidia/nemotron-3-nano-4b"
+    },
+    {
+      "match": "meta/muse-glimmer",
+      "name": "Meta Muse Glimmer (28B as packaged)",
+      "sampling": {
+        "temperature": 0.7,
+        "top_p": 0.9
+      },
+      "suitability": "marginal",
+      "notes": "Apache 2.0, optimised for always-on local agent workflows and tool use rather than constrained prose. That is a plausible reading of why five of its seven candidates quoted scenario names verbatim: agentic tuning rewards grounding in the concrete input, and this task needs the opposite. Note the build in LM Studio reports 28B while Meta's announcement says 30B -- the local package is the one that matters for these results.",
+      "source": "https://huggingface.co/meta-models/Muse-Glimmer-30B"
+    },
+    {
+      "match": "microsoft/phi-4-mini-reasoning",
+      "name": "Phi-4-mini-reasoning (3B as packaged, phi3 arch)",
+      "sampling": {
+        "temperature": 0.8,
+        "top_p": 0.95
+      },
+      "suitability": "out-of-scope",
+      "notes": "The card states it is designed and tested for math reasoning only. Authoring Socratic copy for children is outside that, so its score says nothing about hint quality -- it is a wrong-tool result and should not be compared against the others.",
+      "source": "https://huggingface.co/microsoft/Phi-4-mini-reasoning"
+    },
+    {
+      "match": "qwen/qwen3-4b",
+      "name": "Qwen3 4B",
+      "sampling": {
+        "temperature": 0.7,
+        "top_p": 0.8,
+        "top_k": 20
+      },
+      "suitability": "marginal",
+      "notes": "Untested here. At 4B, expect the small-model failure the benchmark found twice: explaining instead of asking. Qwen non-thinking general-task sampling applied by family.",
+      "source": "https://huggingface.co/Qwen/Qwen3-4B"
+    }
+  ]
+}

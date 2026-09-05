@@ -74,5 +74,45 @@ class ResolveReasoning(unittest.TestCase):
             draft.resolve_reasoning("http://127.0.0.1:0", "nope/nope", None))
 
 
+class ModelProfiles(unittest.TestCase):
+    """Every card recommends different sampling; none match server defaults."""
+
+    def test_prefix_match(self):
+        self.assertEqual(profile_name("google/gemma-4-31b"), "Gemma 4 (26B-A4B MoE, 31B dense)")
+        self.assertEqual(profile_name("google/gemma-4-26b-a4b-qat"), "Gemma 4 (26B-A4B MoE, 31B dense)")
+
+    def test_families_are_distinguished(self):
+        self.assertNotEqual(profile_name("qwen/qwen3.6-35b-a3b"), profile_name("qwen/qwen3.8-27b"))
+
+    def test_gemma_keeps_its_high_temperature(self):
+        # The card warns the family behaves oddly when this is dropped, so a
+        # future "lower it for structured output" instinct should fail here.
+        self.assertEqual(draft.profile_for("google/gemma-4-31b")["sampling"]["temperature"], 1.0)
+
+    def test_unknown_model_falls_back_without_crashing(self):
+        p = draft.profile_for("someone/unreleased-model")
+        self.assertEqual(p["suitability"], "unknown")
+        self.assertIn("temperature", p["sampling"])
+
+    def test_out_of_scope_is_flagged(self):
+        self.assertEqual(
+            draft.profile_for("microsoft/phi-4-mini-reasoning")["suitability"], "out-of-scope")
+
+
+class StructuredOutput(unittest.TestCase):
+    def test_response_format_is_built_from_the_shipped_schema(self):
+        rf = draft.hint_response_format()
+        self.assertEqual(rf["type"], "json_schema")
+        schema = rf["json_schema"]["schema"]
+        # $schema/$id would make the API reject it; the real schema has both.
+        self.assertFalse([k for k in schema if k.startswith("$")])
+        self.assertIn("body", schema["properties"])
+        self.assertIn("match", schema["properties"])
+
+
+def profile_name(model):
+    return draft.profile_for(model)["name"]
+
+
 if __name__ == "__main__":
     unittest.main()

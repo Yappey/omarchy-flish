@@ -124,6 +124,15 @@ rejects are kept next to their reason. Survivors land in
 `tools/curate/candidates/` (gitignored) and reach `templates/hints/` only when a
 person moves one there.
 
+**Prefer `--structured` where it works.** LM Studio exposes an
+OpenAI-compatible endpoint alongside its own API and supports
+`response_format: json_schema` there, so the decoder can be constrained to
+`hint.schema.json` directly. A model cannot answer in prose if the grammar will
+not let it, which removes the failure that cost this benchmark several
+candidates. It is opt-in because the native endpoint is the one exposing the
+reasoning control. *Not yet verified against a live model* — it was added after
+the last model was unloaded.
+
 **Load the model you want before running this.** `draft.py` refuses to draft
 with a model LM Studio has not already loaded, because asking for an unloaded
 one can trigger a just-in-time load — and this tool loops, over candidates and
@@ -151,7 +160,28 @@ and `ls/Not_Found`:
 Seven attempts each, three on `cat/Is_A_Directory` and four on `ls/Not_Found`,
 re-gated under the current rules rather than the rules in force when each ran.
 
-**Two caveats, both worth more than the ranking.**
+**Three caveats, all worth more than the ranking.**
+
+*Nobody read the model cards until after the benchmark ran.* Doing so changed
+how two rows should be read and found a confound under all of them —
+`tools/curate/model-profiles.json` records what each card says:
+
+- **`phi-4-mini-reasoning` is out of scope.** Its card states it is "designed
+  and tested for math reasoning only". Authoring Socratic copy for children is
+  not that, so its result says nothing about hint quality. The tool now warns
+  before drafting with it.
+- **`muse-glimmer` is an agentic model**, tuned for local agent workflows and
+  tool use rather than constrained prose. That is a plausible reading of why
+  five of seven candidates quoted scenario names verbatim: agentic tuning
+  rewards grounding in the concrete input, and this task wants the opposite.
+- **Every model ran on LM Studio's defaults, which match no card.** Gemma 4
+  asks for temperature 1.0 and warns the family behaves oddly when it is
+  lowered; Qwen3.6 asks for 0.7 with `presence_penalty` 1.5; Nemotron 3 for
+  0.6. The tool sent none of these, so the benchmark was partly measuring the
+  defaults. It now applies per-model settings, which means **these scores are
+  not reproducible against the current tool** — re-run before trusting them.
+
+
 
 *The gate moved under the models.* `muse-glimmer` scored 3/3 on the cat slot when
 it ran and 1/3 an hour later, because it exposed the rule that then caught it.

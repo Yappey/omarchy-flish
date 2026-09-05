@@ -48,6 +48,8 @@ SLOTS = REPO / "templates" / "schema" / "slots.json"
 HINTS = REPO / "templates" / "hints"
 SCENARIOS = REPO / "templates" / "scenarios"
 PROMPT = REPO / "tools" / "curate" / "prompts" / "author-slot.md"
+PROFILES = REPO / "tools" / "curate" / "model-profiles.json"
+HINT_SCHEMA = REPO / "templates" / "schema" / "hint.schema.json"
 VALIDATOR = REPO / "tests" / "validate-candidate.js"
 OUT = REPO / "tools" / "curate" / "candidates"
 
@@ -142,6 +144,37 @@ def slot_key(slot):
     return f"{slot['command'] or '*'}/{slot['status']}"
 
 
+def profile_for(model):
+    """Published-model-card settings for this model, or the fallback.
+
+    Every card recommends different sampling parameters and none of them match
+    LM Studio's defaults, which is what the tool used to send. That made the
+    defaults part of what the benchmark measured.
+    """
+    data = load(PROFILES)
+    for entry in data["profiles"]:
+        if model.startswith(entry["match"]):
+            return entry
+    return {"name": model, "sampling": data["defaults"]["sampling"],
+            "suitability": "unknown",
+            "notes": "No profile; using conservative defaults. Read the card and add one.",
+            "source": ""}
+
+
+def hint_response_format():
+    """A JSON-schema response_format built from the shipped hint schema.
+
+    Constraining the decoder is strictly better than parsing prose afterwards:
+    it removes the entire class of failure where a model answers correctly but
+    not in JSON, which cost this benchmark several candidates before the reply
+    parser was fixed.
+    """
+    schema = load(HINT_SCHEMA)
+    schema = {k: v for k, v in schema.items() if not k.startswith("$")}
+    return {"type": "json_schema",
+            "json_schema": {"name": "flish_hint", "strict": True, "schema": schema}}
+
+
 def model_tag(model):
     """A filename-safe short name: 'google/gemma-4-26b-a4b-qat' -> 'gemma-4-26b-a4b-qat'."""
     return re.sub(r"[^A-Za-z0-9._-]", "-", model.split("/")[-1]) or "model"
@@ -212,7 +245,7 @@ def build_input(slot):
     return payload
 
 
-def chat(host, model, system_prompt, user_input, reasoning="off", timeout=300):
+def chat(host, model, system_prompt, user_input, reasoning="off", sampling=None, timeout=300):
     """One generation. Raises TimeoutError if the model is just slow, and
     URLError if LM Studio is actually gone -- the caller treats those
     differently, because one candidate being slow is not a reason to abandon
@@ -239,11 +272,39 @@ def chat(host, model, system_prompt, user_input, reasoning="off", timeout=300):
     }
     if reasoning is not None:
         payload["reasoning"] = reasoning
+    if sampling:
+        payload.update(sampling)
     body = json.dumps(payload).encode()
     req = urllib.request.Request(f"{host}/api/v1/chat", data=body,
                                  headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return json.loads(resp.read())
+
+
+def chat_structured(host, model, system_prompt, user_input, sampling=None, timeout=300):
+    """Same request through the OpenAI-compatible endpoint, with the decoder
+    constrained to the hint schema.
+
+    LM Studio exposes /v1/chat/completions alongside its own API and supports
+    response_format json_schema there. Where it works this is the better path:
+    a model cannot answer in prose if the grammar will not let it. It is opt-in
+    because the native endpoint is the one that exposes the reasoning control,
+    and not every backend honours constrained decoding equally."""
+    payload = {
+        "model": model,
+        "messages": [{"role": "system", "content": system_prompt},
+                     {"role": "user", "content": user_input}],
+        "response_format": hint_response_format(),
+    }
+    if sampling:
+        payload.update(sampling)
+    req = urllib.request.Request(f"{host}/v1/chat/completions",
+                                 data=json.dumps(payload).encode(),
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        data = json.loads(resp.read())
+    content = data["choices"][0]["message"]["content"]
+    return {"output": [{"type": "message", "content": content}]}
 
 
 def message_text(response):
@@ -330,8 +391,11 @@ def draft_slot(slot, args):
     kept = 0
     for i in range(1, args.n + 1):
         try:
-            response = chat(args.host, args.model, system, json.dumps(payload),
-                            reasoning=args.reasoning, timeout=args.timeout)
+            call = chat_structured if args.structured else chat
+            kwargs = {"sampling": args.sampling, "timeout": args.timeout}
+            if not args.structured:
+                kwargs["reasoning"] = args.reasoning
+            response = call(args.host, args.model, system, json.dumps(payload), **kwargs)
         except TimeoutError:
             # Slow, not gone. Reasoning on a large dense model can run for many
             # minutes per candidate, and one that overruns must not take the
@@ -405,6 +469,13 @@ def main():
                     help="seconds per generation (default 300). Reasoning on a "
                          "large dense model can exceed this; a candidate that "
                          "overruns is skipped, not fatal.")
+    ap.add_argument("--structured", action="store_true",
+                    help="constrain the decoder to the hint schema via the "
+                         "OpenAI-compatible endpoint. Removes the whole class of "
+                         "replies that answer correctly but not in JSON.")
+    ap.add_argument("--raw-sampling", action="store_true",
+                    help="send no sampling parameters and use the server's "
+                         "defaults, as this tool did before model profiles existed")
     ap.add_argument("--models", action="store_true", help="list LM Studio models and exit")
     ap.add_argument("--allow-jit", action="store_true",
                     help="draft with a model that is not loaded, letting LM Studio "
@@ -466,6 +537,14 @@ def main():
 
     # Record the conditions alongside the candidates, so a comparison run months
     # from now is not guesswork about how LM Studio was configured at the time.
+    profile = profile_for(args.model)
+    args.sampling = None if args.raw_sampling else dict(profile["sampling"])
+    if profile["suitability"] == "out-of-scope":
+        print(f"warning: {profile['name']} is out of scope for this task.")
+        print(f"         {profile['notes']}")
+    print(f"{profile['name']}  suitability={profile['suitability']}  "
+          f"sampling={json.dumps(args.sampling) if args.sampling else 'server defaults'}")
+
     args.reasoning = resolve_reasoning(args.host, args.model, args.reasoning)
     config = instance_config(args.host, args.model)
     if config:
