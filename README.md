@@ -68,15 +68,33 @@ engine/scripts/test.sh
 scripts/dev-install-tutor.sh
 ```
 
-Then add the plugin to `~/.config/omarchy/shell.json` and restart the shell:
-
-```json
-"plugins": [{ "id": "flish.tutor" }]
-```
+A third-party plugin is enabled iff its id appears in
+`~/.config/omarchy/shell.json`. Let Omarchy write that entry for you:
 
 ```bash
-omarchy restart shell
+omarchy plugin enable flish.tutor
 ```
+
+### Develop the overlay without the engine
+
+The engine's socket client is not implemented yet, so the tutor is developed
+against a stand-in that speaks the same protocol:
+
+```bash
+scripts/fake-engine.py                 # a hint, then wait for ack + feedback
+scripts/fake-engine.py --ttl 0         # hold the card open while you style it
+scripts/fake-engine.py --long          # a long body, to shake out layout bugs
+```
+
+To iterate on the card's visuals alone, no socket is needed at all — the shell
+will summon the panel directly:
+
+```bash
+omarchy-shell shell summon flish.tutor '{"v":1,"type":"hint","id":"t1","title":"That is a file, not a folder","body":"Which command shows you what is written inside something?","ttl_ms":0}'
+```
+
+Saving a file under `~/.config/omarchy/plugins/` hot-reloads plugin code. If a
+change does not seem to take, `omarchy restart shell` always settles it.
 
 ## Contributing
 

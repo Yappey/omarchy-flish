@@ -42,6 +42,17 @@ If the socket is missing, refuses the connection, or blocks, the engine
 hints are an enhancement. The engine never blocks the REPL on IPC and never
 prints an IPC error to the child's terminal.
 
+### Disconnect retires the hint
+
+When a connection drops, the tutor takes down any hint that arrived on it and
+forgets the hint id. A hint outlives neither its engine nor its terminal: its
+buttons could no longer reach anyone, and at `ttl_ms` 0 it would otherwise sit
+on the desktop until the shell restarted.
+
+So the engine does not need to send a `dismiss` on the way out. Closing the
+socket is enough, and is the more reliable signal because it also covers a
+crash.
+
 ## Framing
 
 Newline-delimited JSON (NDJSON). One JSON object per line, UTF-8, `\n`

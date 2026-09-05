@@ -14,25 +14,35 @@ Item {
   property var shell: null
   property var manifest: null
 
-  readonly property string runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") || ""
-  readonly property string socketDir: (runtimeDir !== "" ? runtimeDir : "/tmp") + "/omarchy-flish"
-  readonly property string socketPath: socketDir + "/tutor.sock"
+  // Resolved by prepareSocket below rather than in QML, so the fallback for an
+  // unset XDG_RUNTIME_DIR is /run/user/$(id -u) -- byte-for-byte what the
+  // engine computes in engine/src/ipc/ipc.odin. QML has no getuid(), and a
+  // tutor listening somewhere the engine never dials is a silent failure.
+  property string socketDir: ""
+  readonly property string socketPath: socketDir !== "" ? socketDir + "/tutor.sock" : ""
 
-  // hintId -> the Socket that delivered it, so feedback goes back to the engine
-  // that actually asked. Cleared when a connection drops; a late click on a
-  // hint from a closed terminal is dropped rather than misrouted.
-  property var hintOrigins: ({})
+  // The tutor shows one hint at a time, so it only ever needs the origin of the
+  // hint currently on screen: that is the only one whose buttons can still be
+  // pressed. Keeping a single pair instead of an id->socket map means there is
+  // nothing to leak when a hint is replaced rather than answered.
+  property string currentHintId: ""
+  property var currentSocket: null
 
   Component.onCompleted: prepareSocket.running = true
 
   // A socket file left behind by a crashed shell would make listen() fail, so
-  // create the directory and clear the path before the server claims it.
+  // create the directory and clear the path before the server claims it. The
+  // resolved directory comes back on stdout.
   Process {
     id: prepareSocket
-    command: ["sh", "-c", 'mkdir -p "$1" && rm -f "$2"', "sh", root.socketDir, root.socketPath]
+    command: ["sh", "-c",
+      'dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/omarchy-flish"; mkdir -p "$dir" && rm -f "$dir/tutor.sock" && printf %s "$dir"']
+    stdout: StdioCollector {
+      onStreamFinished: root.socketDir = String(text || "").trim()
+    }
     onExited: function (code) {
-      if (code === 0) server.active = true
-      else console.warn("flish.tutor: could not prepare socket dir:", root.socketDir)
+      if (code === 0 && root.socketDir !== "") server.active = true
+      else console.warn("flish.tutor: could not prepare socket dir")
     }
   }
 
@@ -84,39 +94,66 @@ Item {
     var id = String(message.id || "")
     if (id === "") return
 
-    var origins = ({})
-    for (var key in root.hintOrigins) origins[key] = root.hintOrigins[key]
-    origins[id] = socket
-    root.hintOrigins = origins
+    root.currentHintId = id
+    root.currentSocket = socket
 
     if (root.shell) root.shell.summon("flish.tutor", JSON.stringify(message))
   }
 
+  // Only the engine that owns the hint on screen may take it down. Without the
+  // id check, one child's terminal resetting would yank the hint another
+  // terminal is still showing.
   function dismiss(message) {
+    var id = String(message.id || "")
+    if (id === "" || id !== root.currentHintId) return
+    root.clearCurrent()
     if (root.shell) root.shell.hide("flish.tutor")
   }
 
   // --------------------------------------------------------------- outbound
 
-  // Called by HintPanel.qml when the child taps 👍 or 👎.
-  function sendFeedback(hintId, verdict) {
-    var socket = root.hintOrigins[hintId]
-    if (!socket || !socket.connected) return
+  function send(socket, payload) {
+    if (!socket || !socket.connected) return false
+    socket.write(JSON.stringify(payload) + "\n")
+    socket.flush()
+    return true
+  }
 
-    socket.write(JSON.stringify({
+  // Called by HintPanel.qml once a hint has actually reached a screen. Lets the
+  // engine tell "this hint did not help" apart from "this hint was never seen".
+  function sendAck(hintId) {
+    if (hintId !== root.currentHintId) return
+    root.send(root.currentSocket, {
+      v: 1,
+      type: "ack",
+      id: hintId,
+      rendered: true
+    })
+  }
+
+  // Called by HintPanel.qml when the child taps a feedback button.
+  function sendFeedback(hintId, verdict) {
+    if (hintId !== root.currentHintId) return
+    root.send(root.currentSocket, {
       v: 1,
       type: "feedback",
       id: hintId,
       verdict: verdict,
       at: new Date().toISOString()
-    }) + "\n")
-    socket.flush()
+    })
   }
 
+  function clearCurrent() {
+    root.currentHintId = ""
+    root.currentSocket = null
+  }
+
+  // The terminal that asked for this hint has gone away, so the hint has gone
+  // stale: its buttons can no longer reach anyone, and at ttl_ms 0 it would sit
+  // on the desktop indefinitely. Take it down with the connection.
   function forgetConnection(socket) {
-    var origins = ({})
-    for (var key in root.hintOrigins)
-      if (root.hintOrigins[key] !== socket) origins[key] = root.hintOrigins[key]
-    root.hintOrigins = origins
+    if (root.currentSocket !== socket) return
+    root.clearCurrent()
+    if (root.shell) root.shell.hide("flish.tutor")
   }
 }
