@@ -175,6 +175,10 @@ def build_input(slot):
 
 
 def chat(host, model, system_prompt, user_input, reasoning="off", timeout=300):
+    """One generation. Raises TimeoutError if the model is just slow, and
+    URLError if LM Studio is actually gone -- the caller treats those
+    differently, because one candidate being slow is not a reason to abandon
+    the batch."""
     # Reasoning defaults off, but it is not free either way -- measure it per
     # model rather than assuming. On the same two slots, seven candidates each:
     #
@@ -252,9 +256,17 @@ def draft_slot(slot, args):
     for i in range(1, args.n + 1):
         try:
             response = chat(args.host, args.model, system, json.dumps(payload),
-                            reasoning=args.reasoning)
-        except (urllib.error.URLError, TimeoutError) as exc:
-            print(f"  [{i}] model unreachable at {args.host}: {exc}")
+                            reasoning=args.reasoning, timeout=args.timeout)
+        except TimeoutError:
+            # Slow, not gone. Reasoning on a large dense model can run for many
+            # minutes per candidate, and one that overruns must not take the
+            # rest of the batch with it -- especially under --all, where the
+            # run is long and nobody is watching.
+            print(f"  [{i}] timed out after {args.timeout}s "
+                  f"(raise --timeout, or try --reasoning off)")
+            continue
+        except urllib.error.URLError as exc:
+            print(f"  [{i}] LM Studio unreachable at {args.host}: {exc}")
             return kept
 
         text = message_text(response)
@@ -301,6 +313,10 @@ def main():
     ap.add_argument("-n", type=int, default=3, help="candidates per slot (default 3)")
     ap.add_argument("--reasoning", choices=["off", "on"], default="off",
                     help="model deliberation before answering (default off; see chat())")
+    ap.add_argument("--timeout", type=int, default=300,
+                    help="seconds per generation (default 300). Reasoning on a "
+                         "large dense model can exceed this; a candidate that "
+                         "overruns is skipped, not fatal.")
     ap.add_argument("--models", action="store_true", help="list LM Studio models and exit")
     ap.add_argument("--allow-jit", action="store_true",
                     help="draft with a model that is not loaded, letting LM Studio "

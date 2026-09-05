@@ -184,10 +184,17 @@ the default.
 
 Turning reasoning back **on** for it does fix the contract adherence — the first
 candidate came back as valid JSON, passed the gate, and used `{{target}}`
-correctly where the off-run had answered in prose. It also took **about seven
-minutes for that one candidate**, against seconds for the off runs. So the
-setting that fixes its output also makes it impractical for bulk drafting on a
-dense 27B; the fix and the cost arrive together.
+correctly where the off-run had answered in prose. It also took about seven
+minutes for that one candidate, and the second **exceeded the 300s per-generation
+timeout**. So the setting that fixes its output is the same one that makes the
+model impractical for bulk drafting on a dense 27B; the fix and the cost arrive
+together.
+
+That run also exposed a real bug: a timeout used to abort the whole slot. One
+slow candidate must not take the batch with it, least of all under `--all`
+where the run is long and unattended, so a timeout is now skipped rather than
+fatal and `--timeout` is adjustable. A genuinely unreachable server still stops
+the slot, because retrying into a dead socket is pointless.
 
 It also made the best decorator judgement so far. Two of its three
 `cat/Is_A_Directory` candidates declared `target_is_empty_dir` *and* leaned on
