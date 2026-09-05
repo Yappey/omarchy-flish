@@ -124,13 +124,35 @@ rejects are kept next to their reason. Survivors land in
 `tools/curate/candidates/` (gitignored) and reach `templates/hints/` only when a
 person moves one there.
 
-**Expect a low pass rate.** On a 4B model, 2 of 7 candidates survived the gate in
-the first run; the dominant failure by far is *explaining instead of asking*,
-which is why "body contains a question mark" is a mechanical rule. Generate 4-6
-per slot and read the survivors. The gate checks structure, No-Do and question
-form — it cannot tell you whether the explanation is **true**, and the first
-model output that passed structurally still claimed `cat` reports a directory
-"because there are no files to list", which is wrong. That is what review is for.
+**Which model, and whether it deliberates, is measurable — so measure it.**
+Candidate filenames carry the model, so two models drafting the same slot leave
+both sets side by side. Seven candidates each, on `cat/Is_A_Directory` and
+`ls/Not_Found`:
+
+| Model | Reasoning | Passed | Speed |
+|---|---|---|---|
+| `gemma-4-26b-a4b-qat` | off | **7/7** | ~6s each |
+| `nemotron-3-nano-4b` | on | 2/7 | minutes each |
+| `nemotron-3-nano-4b` | off | 0/7 | fast |
+
+Deliberation is what gets a 4B model to ask a question instead of stating a
+fact; on the 26B MoE it is pure latency. The dominant failure by far is
+*explaining instead of asking*, which is why "the body contains a question mark"
+is a mechanical rule.
+
+**The gate cannot check whether the copy is true, and that is the point of
+review.** Nemotron produced a structurally valid hint claiming `cat` reports a
+directory *"because there are no files to list"* — wrong. Gemma's output is
+markedly better, and still needs a reviewer: one candidate declared
+`requires: {"target_is_empty_dir": true}` while its body never mentions
+emptiness, so the lesson actually holds for any directory. That is the same
+error the coverage test catches in committed templates — an unnecessary
+decorator inflates the specificity score and outranks hints that deserve to win
+— but in a candidate it is a judgement call, not a rule.
+
+Worth reading every candidate for: is the causal explanation true, is the
+question one a child could act on, and does every declared decorator earn its
+place?
 
 ## Manual checks
 

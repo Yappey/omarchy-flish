@@ -15,6 +15,11 @@ person moves them there -- see docs/decisions.md, D9.
     tools/curate/draft.py --slot cat/Not_Found -n 5 # 5 candidates, keep the ones that pass
     tools/curate/draft.py --all -n 3                # every uncovered slot
 
+Candidate filenames carry the model, so drafting the same slot with two models
+leaves both sets side by side. Which model to author with is a real choice --
+a bigger one that passes the gate more often is worth slower generation -- and
+this is how you measure it rather than guess.
+
 Every candidate is put through tests/validate-candidate.js before it is
 written. Rejects are kept alongside, with the reason, because a model that
 keeps failing the same rule is telling you the prompt needs work.
@@ -24,6 +29,7 @@ import argparse
 import json
 import os
 import pathlib
+import re
 import subprocess
 import sys
 import urllib.error
@@ -57,6 +63,11 @@ def uncovered_slots():
 
 def slot_key(slot):
     return f"{slot['command'] or '*'}/{slot['status']}"
+
+
+def model_tag(model):
+    """A filename-safe short name: 'google/gemma-4-26b-a4b-qat' -> 'gemma-4-26b-a4b-qat'."""
+    return re.sub(r"[^A-Za-z0-9._-]", "-", model.split("/")[-1]) or "model"
 
 
 def walk(entries, prefix=""):
@@ -124,11 +135,23 @@ def build_input(slot):
     return payload
 
 
-def chat(host, model, system_prompt, user_input, timeout=180):
+def chat(host, model, system_prompt, user_input, reasoning="off", timeout=300):
+    # Reasoning defaults off, but it is not free either way -- measure it per
+    # model rather than assuming. On the same two slots, seven candidates each:
+    #
+    #   gemma-4-26b-a4b-qat   reasoning off   7/7 passed, ~6s each
+    #   nemotron-3-nano-4b    reasoning on    2/7 passed, minutes each
+    #   nemotron-3-nano-4b    reasoning off   0/7 passed
+    #
+    # So deliberation is what gets the small model to ask a question instead of
+    # stating a fact, and it is pure latency on the capable one. Off is the right
+    # default only because a model like gemma is available; on a 4B model, off
+    # produces nothing usable at all.
     body = json.dumps({
         "model": model,
         "system_prompt": system_prompt,
         "input": user_input,
+        "reasoning": reasoning,
     }).encode()
     req = urllib.request.Request(f"{host}/api/v1/chat", data=body,
                                  headers={"Content-Type": "application/json"})
@@ -185,14 +208,15 @@ def draft_slot(slot, args):
     kept = 0
     for i in range(1, args.n + 1):
         try:
-            response = chat(args.host, args.model, system, json.dumps(payload))
+            response = chat(args.host, args.model, system, json.dumps(payload),
+                            reasoning=args.reasoning)
         except (urllib.error.URLError, TimeoutError) as exc:
             print(f"  [{i}] model unreachable at {args.host}: {exc}")
             return kept
 
         text = message_text(response)
         candidate = extract_json(text)
-        stem = key.replace("/", "-").replace("*", "any")
+        stem = f'{key.replace("/", "-").replace("*", "any")}.{model_tag(args.model)}' 
 
         if candidate is None:
             print(f"  [{i}] no JSON in the reply")
@@ -227,6 +251,8 @@ def main():
     ap.add_argument("--all", action="store_true", help="every uncovered slot")
     ap.add_argument("--list", action="store_true", help="show uncovered slots and exit")
     ap.add_argument("-n", type=int, default=3, help="candidates per slot (default 3)")
+    ap.add_argument("--reasoning", choices=["off", "on"], default="off",
+                    help="model deliberation before answering (default off; see chat())")
     ap.add_argument("--show-input", action="store_true", help="print the model input and exit")
     args = ap.parse_args()
 
@@ -253,7 +279,11 @@ def main():
         sys.exit("pass --model or set FLISH_MODEL (see: curl $FLISH_LMSTUDIO/api/v1/models)")
 
     total = sum(draft_slot(s, args) for s in todo)
-    print(f"\n{total} candidate(s) passed the gate, in {OUT.relative_to(REPO)}")
+    attempted = len(todo) * args.n
+    rate = f"{total}/{attempted}" if attempted else "0/0"
+    print(f"\n{rate} candidate(s) passed the gate "
+          f"({model_tag(args.model)}, reasoning {args.reasoning}), "
+          f"in {OUT.relative_to(REPO)}")
     print("Nothing ships until a person reviews one and moves it to templates/hints/.")
     return 0
 
