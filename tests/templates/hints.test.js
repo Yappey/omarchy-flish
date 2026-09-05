@@ -85,7 +85,7 @@ test("no unknown placeholders", () => {
   }
 })
 
-import { findRunnableCommand, asksAQuestion, findLiteralFilename, findScenarioName } from "../helpers/no-do.js"
+import { findRunnableCommand, asksAQuestion, findLiteralFilename, findScenarioName, findJargon } from "../helpers/no-do.js"
 import { knownSlots, slotKeyOf, scenarioNames } from "../helpers/dictionary.js"
 
 test("no hint body contains a runnable command line (No-Do)", () => {
@@ -128,6 +128,20 @@ test("the scenario-name check ignores placeholders and partial words", () => {
   assert.equal(findScenarioName("Think about cavespeak.", names), null)
   assert.equal(findScenarioName("You saw: cat: caves: Is a directory", names), "caves")
   assert.equal(findScenarioName("Did you mean secret_map.txt?", names), "secret_map.txt")
+})
+
+test("no hint speaks the matcher's vocabulary at the child", () => {
+  for (const { file, data } of hints) {
+    const found = findJargon(data.body)
+    assert.equal(found, null, `${file} uses "${found}":\n  ${data.body}`)
+  }
+})
+
+test("the jargon check keeps the words the error itself uses", () => {
+  assert.equal(findJargon("The terminal said Not a directory. What is {{target}}?"), null)
+  assert.equal(findJargon("Is the file in another folder?"), null)
+  assert.equal(findJargon("Try checking siblings or moving up directories."), "siblings")
+  assert.equal(findJargon("If the target you gave is empty, what then?"), "target")
 })
 
 test("the literal-filename check tolerates ordinary punctuation", () => {

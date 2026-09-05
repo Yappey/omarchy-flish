@@ -15,7 +15,7 @@
 import { readFileSync } from "node:fs"
 import Ajv from "ajv/dist/2020.js"
 import { hintSchema, knownSlots, slotKey, slotKeyOf, scenarioNames } from "./helpers/dictionary.js"
-import { findRunnableCommand, asksAQuestion, findLiteralFilename, findScenarioName } from "./helpers/no-do.js"
+import { findRunnableCommand, asksAQuestion, findLiteralFilename, findScenarioName, findJargon } from "./helpers/no-do.js"
 
 const arg = process.argv[2]
 if (!arg) {
@@ -81,6 +81,13 @@ if (fromScenario) {
   problems.push(
     `body names "${fromScenario}" from a scenario; use {{target}} so the hint ` +
     `is not tied to one world`)
+}
+
+const jargon = findJargon(candidate.body || "")
+if (jargon) {
+  problems.push(
+    `body uses "${jargon}", which is engineering vocabulary from the matcher, ` +
+    `not language a 7-12 year old reads`)
 }
 
 const runnable = findRunnableCommand(candidate.body || "")

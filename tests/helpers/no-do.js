@@ -125,3 +125,26 @@ export function findScenarioName(body, names) {
   }
   return null
 }
+
+// The drafting input names its decorators -- target_near_sibling,
+// target_in_parent, cwd_has_children -- and models translate that vocabulary
+// straight into the copy: "try checking siblings or moving up directories".
+// That is engineering language describing the matcher, handed to a seven year
+// old, and it passes every other rule here.
+//
+// "directory" is deliberately absent: it is the word the authentic error uses,
+// so the child has already read it and the hint should echo it.
+const JARGON = [
+  "sibling", "siblings", "cwd", "argv", "decorator", "decorators",
+  "parameter", "parameters", "argument", "arguments", "boolean",
+  "placeholder", "schema", "regex", "substring", "target"
+]
+
+export function findJargon(body) {
+  // {{target}} is the correct way to name the thing; the bare word is not.
+  const text = String(body).replace(/\{\{\s*[a-z_]+\s*\}\}/g, " ")
+  for (const word of JARGON) {
+    if (new RegExp(`(^|[^\\w-])${word}([^\\w-]|$)`, "i").test(text)) return word
+  }
+  return null
+}
