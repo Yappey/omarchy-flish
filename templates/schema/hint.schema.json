@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://omarchy-flish.dev/schema/hint.schema.json",
+  "title": "Omarchy Flish hint template",
+  "description": "One parameterized Socratic hint, written and approved by a person. Never generated at runtime.",
+  "type": "object",
+  "required": ["schema_version", "id", "match", "title", "body"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": 1 },
+
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "Stable, human-readable. Telemetry references it, so it is never reused for different copy."
+    },
+
+    "match": {
+      "type": "object",
+      "description": "All present conditions must hold. An absent condition is not checked.",
+      "additionalProperties": false,
+      "properties": {
+        "command": { "type": "string", "description": "Exact verb, e.g. 'cd'." },
+        "status": {
+          "type": "string",
+          "enum": [
+            "Not_Found",
+            "Not_A_Directory",
+            "Is_A_Directory",
+            "Permission_Denied",
+            "Unknown_Command",
+            "Bad_Usage"
+          ]
+        },
+        "stderr": { "type": "string", "description": "Regex over the authentic error line." }
+      }
+    },
+
+    "requires": {
+      "type": "object",
+      "description": "VFS state decorators. These are what separate two failures that print the same error but teach different lessons.",
+      "additionalProperties": false,
+      "properties": {
+        "target_exists": { "type": "boolean" },
+        "target_is_file": { "type": "boolean" },
+        "cwd_has_children": { "type": "boolean" }
+      }
+    },
+
+    "min_strike": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 3,
+      "description": "Consecutive same-signature failures before this may fire."
+    },
+
+    "title": { "type": "string", "maxLength": 60 },
+
+    "body": {
+      "type": "string",
+      "maxLength": 240,
+      "description": "Socratic. Must ask, never instruct. Must NOT contain a runnable command line -- the child types the answer, the tutor does not supply it. Supports {{target}}."
+    },
+
+    "ttl_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 12000,
+      "description": "Auto-dismiss delay. 0 means stay until dismissed."
+    }
+  }
+}

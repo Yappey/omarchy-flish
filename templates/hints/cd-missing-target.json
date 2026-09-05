@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "id": "cd-missing-target",
+  "match": {
+    "command": "cd",
+    "status": "Not_Found"
+  },
+  "requires": {
+    "target_exists": false,
+    "cwd_has_children": true
+  },
+  "min_strike": 3,
+  "title": "Nothing here is called that",
+  "body": "The terminal could not find {{target}} where you are standing. Is there a command that lists what is actually here, so you can check the spelling?",
+  "ttl_ms": 14000
+}

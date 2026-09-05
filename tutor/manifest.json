@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "flish.tutor",
+  "name": "Flish Tutor",
+  "version": "0.1.0",
+  "author": "Omarchy Flish",
+  "license": "MIT",
+  "description": "Socratic hint overlay for Omarchy Flish, the sandboxed terminal for kids.",
+  "kinds": [
+    "service",
+    "panel"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "service": "Service.qml",
+    "panel": "HintPanel.qml"
+  }
+}
