@@ -258,25 +258,60 @@ def message_text(response):
 
 
 def extract_json(text):
-    """Small models like to wrap JSON in prose or a fence. Take the outermost object."""
-    text = text.strip()
-    if text.startswith("```"):
-        text = text.split("```")[1] if "```" in text[3:] else text
-        text = text.removeprefix("json").strip()
-    start, depth = text.find("{"), 0
-    if start < 0:
-        return None
-    for i in range(start, len(text)):
-        if text[i] == "{":
-            depth += 1
-        elif text[i] == "}":
-            depth -= 1
+    """Pull the candidate object out of a reply.
+
+    Models put it in very different places. Some return bare JSON; some fence
+    it; some -- phi-4-mini-reasoning especially -- emit their whole reasoning
+    chain inline as <think> prose that *discusses* JSON, then give the real
+    answer last. Taking the first brace finds a fragment in the reasoning and
+    throws the actual answer away, which is a bug in the reader rather than the
+    model.
+
+    So: drop think blocks, then work from the end backwards, and prefer an
+    object that looks like a hint template over one that merely parses.
+    """
+    text = str(text or "")
+
+    # <think>...</think>, and an unclosed <think> that runs to the answer.
+    text = re.sub(r"<think>.*?</think>", " ", text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"^.*<think>", " ", text, flags=re.DOTALL | re.IGNORECASE)
+
+    candidates = []
+
+    # Fenced blocks first: if a model fenced something, that is its answer.
+    for block in re.findall(r"```(?:json)?\s*(.*?)```", text, flags=re.DOTALL):
+        candidates.append(block)
+
+    # Then every balanced {...} span in the remaining prose.
+    depth, start = 0, None
+    for i, ch in enumerate(text):
+        if ch == "{":
             if depth == 0:
-                try:
-                    return json.loads(text[start:i + 1])
-                except json.JSONDecodeError:
-                    return None
-    return None
+                start = i
+            depth += 1
+        elif ch == "}" and depth:
+            depth -= 1
+            if depth == 0 and start is not None:
+                candidates.append(text[start:i + 1])
+
+    parsed = []
+    for raw in candidates:
+        try:
+            value = json.loads(raw.strip())
+        except json.JSONDecodeError:
+            continue
+        if isinstance(value, dict):
+            parsed.append(value)
+
+    if not parsed:
+        return None
+
+    # Last-first: the answer follows the reasoning. Prefer something shaped like
+    # a template over a fragment the model quoted while thinking out loud.
+    for value in reversed(parsed):
+        if "match" in value or "body" in value:
+            return value
+    return parsed[-1]
 
 
 def gate(candidate_path):
