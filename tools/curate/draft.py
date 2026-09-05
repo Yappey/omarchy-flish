@@ -155,14 +155,18 @@ def chat(host, model, system_prompt, user_input, reasoning="off", timeout=300):
     # Reasoning defaults off, but it is not free either way -- measure it per
     # model rather than assuming. On the same two slots, seven candidates each:
     #
+    #   gemma-4-31b           reasoning off   7/7 passed, slowest
     #   gemma-4-26b-a4b-qat   reasoning off   7/7 passed, ~6s each
     #   nemotron-3-nano-4b    reasoning on    2/7 passed, minutes each
     #   nemotron-3-nano-4b    reasoning off   0/7 passed
     #
     # So deliberation is what gets the small model to ask a question instead of
-    # stating a fact, and it is pure latency on the capable one. Off is the right
-    # default only because a model like gemma is available; on a 4B model, off
-    # produces nothing usable at all.
+    # stating a fact, and it is pure latency on the capable ones. Off is the
+    # right default only because a model like gemma is available; on a 4B model,
+    # off produces nothing usable at all.
+    #
+    # Above 4B the gate stops discriminating -- both gemmas pass everything --
+    # and the models fail in ways only a reader catches. See tests/README.md.
     body = json.dumps({
         "model": model,
         "system_prompt": system_prompt,

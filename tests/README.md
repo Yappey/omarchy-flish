@@ -136,16 +136,43 @@ Candidate filenames carry the model, so two models drafting the same slot leave
 both sets side by side. Seven candidates each, on `cat/Is_A_Directory` and
 `ls/Not_Found`:
 
-| Model | Reasoning | Passed | Speed |
+| Model | Reasoning | Passed | Notes |
 |---|---|---|---|
-| `gemma-4-26b-a4b-qat` | off | **7/7** | ~6s each |
+| `gemma-4-31b` | off | **7/7** | dense, slowest |
+| `gemma-4-26b-a4b-qat` | off | **7/7** | MoE, 4B active, ~6s each |
 | `nemotron-3-nano-4b` | on | 2/7 | minutes each |
-| `nemotron-3-nano-4b` | off | 0/7 | fast |
+| `nemotron-3-nano-4b` | off | 0/7 | fast, unusable |
 
 Deliberation is what gets a 4B model to ask a question instead of stating a
-fact; on the 26B MoE it is pure latency. The dominant failure by far is
+fact; on the larger models it is pure latency. The dominant failure at 4B is
 *explaining instead of asking*, which is why "the body contains a question mark"
 is a mechanical rule.
+
+**Above 4B the gate stops discriminating, and the two big models fail in
+opposite directions.** On `cat/Is_A_Directory`:
+
+- The 26B MoE attached `requires: {"target_is_empty_dir": true}` to all three
+  candidates while no body mentioned emptiness. The lesson holds for any
+  directory, so the decorator narrows it wrongly and inflates the specificity
+  score — the same error the coverage test catches in committed templates.
+- The 31B omitted `requires` on all three, which is correct. But two of its
+  three bodies point the child at *walking into* the folder, when they typed
+  `cat` because they wanted to see inside it. That teaches a wrong model of the
+  machine: you do not have to enter a directory to list it. The MoE's "which
+  command lists the contents inside a folder" answers what the child actually
+  wanted.
+
+So the bigger model has better structural judgement and the smaller one had
+better pedagogy on this slot. Neither is a safe default, and no rule in the gate
+distinguishes them.
+
+Both models correctly used `target_near_sibling` on `ls/Not_Found`, where the
+decorator is load-bearing — the body genuinely depends on a similar name being
+nearby.
+
+Several candidates for one slot will share an `id`, because the id is semantic
+and models converge on it. That is fine: you pick one. Committing two without
+renaming is caught by the uniqueness test.
 
 **The gate cannot check whether the copy is true, and that is the point of
 review.** Nemotron produced a structurally valid hint claiming `cat` reports a
