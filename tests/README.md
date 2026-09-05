@@ -143,6 +143,7 @@ and `ls/Not_Found`:
 | `gemma-4-26b-a4b-qat` | off | 7/7 | attached a decorator the lesson does not use |
 | `gemma-4-31b` | off | 7/7 | pointed the child at the wrong command |
 | `qwen3.6-35b-a3b` | off | 4/7 | wrote scenario filenames into the template |
+| `qwen3.8-27b` | off | 4/7 | ignored the JSON contract; one literal filename |
 | `nemotron-3-nano-4b` | on | 2/7 | explained instead of asking |
 | `nemotron-3-nano-4b` | off | 0/7 | explained instead of asking, every time |
 
@@ -171,6 +172,21 @@ uncovered ones:
   three bodies asked whether the child needs to walk into the folder, when they
   typed `cat` because they wanted to see inside it. You do not have to enter a
   directory to list it, so the hint teaches a wrong model of the machine.
+
+`qwen3.8-27b` added a fifth failure and the most interesting one. Two of its
+four `ls/Not_Found` replies contained no JSON at all: one answered the task in
+prose, and the other opened *"Let me work through this carefully"* and reasoned
+in the message body. With `reasoning: off` it deliberates anyway, just in the
+answer channel instead of the reasoning one — so **off is not universally right,
+and for a model that thinks inline it can be actively wrong**, the mirror of the
+nemotron result. Check both settings for any new model rather than inheriting
+the default.
+
+It also made the best decorator judgement so far. Two of its three
+`cat/Is_A_Directory` candidates declared `target_is_empty_dir` *and* leaned on
+it in the copy ("Since it is empty...", "see what's inside an empty folder").
+That is the decorator earning its place, which is what the gemma 26B failed to
+do while declaring the same field.
 
 qwen's surviving `cat/Is_A_Directory` candidates were the best of the three
 large models on both judgement axes — correct decorator use *and* pointing at
