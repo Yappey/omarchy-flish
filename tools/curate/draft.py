@@ -66,6 +66,44 @@ def list_models(host, timeout=15):
             for m in payload.get("models", []) if m.get("type") == "llm"]
 
 
+def reasoning_options(host, model, timeout=15):
+    """What reasoning settings this model actually accepts.
+
+    Models disagree: the gemmas and qwens take off/on, muse-glimmer takes
+    low/medium/high/xhigh and 400s on "off". Sending a value blind means
+    discovering that one generation at a time, so ask first.
+    """
+    try:
+        with urllib.request.urlopen(f"{host}/api/v1/models", timeout=timeout) as resp:
+            payload = json.loads(resp.read())
+    except (urllib.error.URLError, TimeoutError):
+        return []
+    for m in payload.get("models", []):
+        if m.get("key") == model:
+            return list(((m.get("capabilities") or {}).get("reasoning") or {})
+                        .get("allowed_options") or [])
+    return []
+
+
+def resolve_reasoning(host, model, requested):
+    """Pick a reasoning setting this model will accept.
+
+    None means send no field at all and let the model use its own default,
+    which is the only safe answer when we cannot tell what it supports.
+    """
+    options = reasoning_options(host, model)
+    if requested is not None:
+        if options and requested not in options:
+            sys.exit(f"{model} does not support reasoning={requested!r}. "
+                     f"Supported: {', '.join(options)}")
+        return requested
+    if not options:
+        return None
+    # Least deliberation the model offers. "off" where it exists, otherwise the
+    # first listed option, which the API orders cheapest-first.
+    return "off" if "off" in options else options[0]
+
+
 def instance_config(host, model, timeout=15):
     """The runtime settings of the loaded instance, or None.
 
@@ -194,12 +232,14 @@ def chat(host, model, system_prompt, user_input, reasoning="off", timeout=300):
     #
     # Above 4B the gate stops discriminating -- both gemmas pass everything --
     # and the models fail in ways only a reader catches. See tests/README.md.
-    body = json.dumps({
+    payload = {
         "model": model,
         "system_prompt": system_prompt,
         "input": user_input,
-        "reasoning": reasoning,
-    }).encode()
+    }
+    if reasoning is not None:
+        payload["reasoning"] = reasoning
+    body = json.dumps(payload).encode()
     req = urllib.request.Request(f"{host}/api/v1/chat", data=body,
                                  headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -265,6 +305,17 @@ def draft_slot(slot, args):
             print(f"  [{i}] timed out after {args.timeout}s "
                   f"(raise --timeout, or try --reasoning off)")
             continue
+        except urllib.error.HTTPError as exc:
+            # The server answered and said no. It will say no identically to
+            # every remaining candidate, so stop -- but surface what it said,
+            # which is usually the whole explanation.
+            try:
+                detail = json.loads(exc.read()).get("error", {}).get("message", "")
+            except Exception:  # noqa: BLE001 - diagnostics must not mask the error
+                detail = ""
+            print(f"  [{i}] rejected by LM Studio (HTTP {exc.code})"
+                  + (f": {detail}" if detail else ""))
+            return kept
         except urllib.error.URLError as exc:
             print(f"  [{i}] LM Studio unreachable at {args.host}: {exc}")
             return kept
@@ -311,8 +362,10 @@ def main():
     ap.add_argument("--all", action="store_true", help="every uncovered slot")
     ap.add_argument("--list", action="store_true", help="show uncovered slots and exit")
     ap.add_argument("-n", type=int, default=3, help="candidates per slot (default 3)")
-    ap.add_argument("--reasoning", choices=["off", "on"], default="off",
-                    help="model deliberation before answering (default off; see chat())")
+    ap.add_argument("--reasoning", default=None,
+                    help="deliberation setting, validated against what the model "
+                         "reports it accepts (off/on for most, low/medium/high/xhigh "
+                         "for others). Default: the cheapest option the model offers.")
     ap.add_argument("--timeout", type=int, default=300,
                     help="seconds per generation (default 300). Reasoning on a "
                          "large dense model can exceed this; a candidate that "
@@ -378,6 +431,7 @@ def main():
 
     # Record the conditions alongside the candidates, so a comparison run months
     # from now is not guesswork about how LM Studio was configured at the time.
+    args.reasoning = resolve_reasoning(args.host, args.model, args.reasoning)
     config = instance_config(args.host, args.model)
     if config:
         interesting = ("context_length", "max_context_length", "flash_attention",
