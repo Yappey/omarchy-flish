@@ -88,3 +88,22 @@ export function findLiteralFilename(body) {
   const m = withoutPlaceholders.match(/\b[\w-]+\.[A-Za-z]{1,5}\b/)
   return m ? m[0] : null
 }
+
+// findLiteralFilename only catches names shaped like word.ext, which misses
+// every directory -- and quoting the error line back with a concrete directory
+// in it ("You saw 'flish: cat: caves: Is a directory'") is the same failure.
+// Scenario names are known exactly, so check against them rather than guessing
+// at a shape.
+//
+// A scenario naming a directory after a word hint copy might legitimately use
+// will make this fire. That friction is correct: the template would still be
+// wrong in a world without that directory.
+export function findScenarioName(body, names) {
+  const text = String(body).replace(/\{\{\s*[a-z_]+\s*\}\}/g, " ")
+  for (const name of names) {
+    if (new RegExp(`(^|[^\\w.-])${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^\\w-]|$)`).test(text)) {
+      return name
+    }
+  }
+  return null
+}

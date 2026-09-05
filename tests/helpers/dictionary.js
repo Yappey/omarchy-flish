@@ -52,6 +52,21 @@ export function decoratorsCompatible(a = {}, b = {}) {
   return true
 }
 
+// Every name any scenario uses, files and directories alike. A template that
+// contains one of these is describing a particular world rather than the
+// failure, and will be wrong in every other world.
+export const scenarioNames = (() => {
+  const names = new Set()
+  const walk = (entries) => {
+    for (const e of entries || []) {
+      names.add(e.name)
+      if (e.kind === "dir") walk(e.entries)
+    }
+  }
+  for (const s of scenarios) walk(s.data.entries)
+  return names
+})()
+
 export function coverage() {
   const covered = new Map()
   for (const h of hints) {

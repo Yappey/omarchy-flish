@@ -85,8 +85,8 @@ test("no unknown placeholders", () => {
   }
 })
 
-import { findRunnableCommand, asksAQuestion, findLiteralFilename } from "../helpers/no-do.js"
-import { knownSlots, slotKeyOf } from "../helpers/dictionary.js"
+import { findRunnableCommand, asksAQuestion, findLiteralFilename, findScenarioName } from "../helpers/no-do.js"
+import { knownSlots, slotKeyOf, scenarioNames } from "../helpers/dictionary.js"
 
 test("no hint body contains a runnable command line (No-Do)", () => {
   for (const { file, data } of hints) {
@@ -112,6 +112,22 @@ test("no hint names a file literally instead of using {{target}}", () => {
       `${file} names "${literal}" literally, so it would be wrong in every ` +
       `scenario but the one it was written against:\n  ${data.body}`)
   }
+})
+
+test("no hint names something from a scenario", () => {
+  for (const { file, data } of hints) {
+    const found = findScenarioName(data.body, scenarioNames)
+    assert.equal(found, null,
+      `${file} names "${found}", which exists only in one scenario:\n  ${data.body}`)
+  }
+})
+
+test("the scenario-name check ignores placeholders and partial words", () => {
+  const names = new Set(["caves", "secret_map.txt"])
+  assert.equal(findScenarioName("Is {{target}} a folder?", names), null)
+  assert.equal(findScenarioName("Think about cavespeak.", names), null)
+  assert.equal(findScenarioName("You saw: cat: caves: Is a directory", names), "caves")
+  assert.equal(findScenarioName("Did you mean secret_map.txt?", names), "secret_map.txt")
 })
 
 test("the literal-filename check tolerates ordinary punctuation", () => {
