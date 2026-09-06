@@ -16,7 +16,9 @@ cd tests && npm install && npm test  # templates + tutor logic, ~70ms, no deskto
 node --test --test-name-pattern "No-Do"          # a single test
 scripts/e2e-tutor.py                 # end-to-end, needs a live shell (~25s)
 node tests/validate-candidate.js F   # gate one drafted hint (same rules as the suite)
+node tests/where-does-it-fire.js F   # which scenarios it fires in, with the copy rendered
 tools/curate/draft.py --list         # uncovered slots: the authoring worklist
+tools/curate/draft.py --slot S --min-strike 5   # the blunter second hint of a pair
 tools/curate/draft.py --models       # LM Studio models; drafting needs one LOADED
 tools/curate/review.py --list        # drafted candidates awaiting a human decision
 tools/curate/review.py               # walk the queue: slot, world, judgement questions
@@ -240,22 +242,28 @@ Closest first-party references: `plugins/osd/` (transient summoned card),
 - **Engine IPC is a stub.** `core:net` has no AF_UNIX type, so `ipc.connect`
   always returns disconnected and the engine runs permanently degraded. Needs
   `core:sys/linux`. This is why `scripts/fake-engine.py` exists.
-- **Hint dictionary covers 2 of 8 slots shipped, with 18 candidates drafted and
+- **Hint dictionary covers 2 of 8 slots shipped, with 44 candidates drafted and
   pending review** across the other six — `tools/curate/review.py --list`.
   Drafting refuses an unloaded model by default: it loops, and a just-in-time
   load of several large models is not something to trigger unattended on someone
   else's hardware.
-- **Thirteen gate rules.** Five exist because a model produced that failure and
-  it had not been anticipated; one, `findUngroundedAssumption`, exists because a
-  human rejected the same true-looking, world-false copy six times in one review
-  pass (D16). Format faults are no longer among them -- `draft.py` repairs those
-  before the gate runs. What no rule catches, and what review is
-  for: whether the explanation is *true* of the world, whether it points at the
-  command the child wants, and whether a decorator is declared without being used
-  *or* depended on without being declared. Each has already shipped a wrong hint
-  past every rule.
-- **All five decorators are reachable** since `templates/scenarios/lighthouse.json`
-  added a root-cwd world; `cwd_is_root` was previously authorable but unfirable.
+- **Fifteen gate rules.** Five exist because a model produced that failure and it
+  had not been anticipated; `findUngroundedAssumption` exists because a human
+  rejected the same true-looking, world-false copy six times in one review pass
+  (D16); and "fires in no scenario" became checkable only once the reference
+  matcher existed. Format faults are no longer among them -- `draft.py` repairs
+  those before the gate runs. What no rule catches, and what review is for:
+  whether it points at the command the child wants, and whether a decorator is
+  declared without being used *or* depended on without being declared. Both have
+  already shipped a wrong hint past every rule. "Is it true of the world?" used
+  to be on that list; `review.py --show` now answers it by rendering the copy at
+  every place the template fires.
+- **Every world decorator is reachable in both polarities**, and the reachability
+  report enumerates `slots.decorators` rather than a hand-kept list, so adding a
+  decorator with no world to exercise it fails the suite.
+  `templates/scenarios/workshop.json` is the only world that starts the child
+  where files and folders sit side by side, which is what makes `cwd_has_files`
+  true on the very first turn.
 - **Regex is unimplemented.** `match.stderr` is specified as a regex but
   compared as a substring; the `{{target}}` extraction wants named captures.
   Decide `core:text/regex` vs a PCRE2 binding (D2).

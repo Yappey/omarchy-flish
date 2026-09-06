@@ -74,13 +74,20 @@ test("every placeholder can render to something", () => {
 
 // The same predicate the drafting gate runs, so a rule cannot be tightened for
 // candidates and left loose for what is already committed.
-test("{{near}} is refused without the decorator that guarantees it", () => {
-  const near = { body: "Did you mean {{near}}?", requires: { target_near_sibling: true } }
-  assert.deepEqual(placeholderProblems(near, { has_target: true }), [])
-  assert.equal(placeholderProblems({ body: "Did you mean {{near}}?" }, { has_target: true }).length, 1)
+test("{{near}} needs the decorator that guarantees it AND a raised min_strike", () => {
+  const slot = { has_target: true }
+  const body = "Did you mean {{near}}?"
+  const near = { body, requires: { target_near_sibling: true } }
+
+  // Naming the correction ends the thinking, so it is the second hint, not the
+  // first. Both conditions are required and each is reported on its own.
+  assert.deepEqual(placeholderProblems({ ...near, min_strike: 5 }, slot), [])
+  assert.equal(placeholderProblems(near, slot).length, 1, "default min_strike is too soon")
+  assert.equal(placeholderProblems({ ...near, min_strike: 3 }, slot).length, 1)
+  assert.equal(placeholderProblems({ body, min_strike: 5 }, slot).length, 1, "no decorator")
+  assert.equal(placeholderProblems({ body }, slot).length, 2, "neither")
   assert.equal(
-    placeholderProblems({ body: "Did you mean {{near}}?", requires: { cwd_has_files: true } },
-      { has_target: true }).length, 1)
+    placeholderProblems({ body, min_strike: 5, requires: { cwd_has_files: true } }, slot).length, 1)
 })
 
 import { findRunnableCommand, asksAQuestion, findLiteralFilename, findScenarioName, findJargon, findUngroundedAssumption } from "../helpers/no-do.js"
@@ -223,4 +230,17 @@ test("findUngroundedAssumption separates a claim from a description", () => {
   // With a target, {{target}} names the thing and no claim is made.
   assert.equal(findUngroundedAssumption("Which file did you mean?",
     { hasTarget: true, requires: {} }), null)
+})
+
+// The verb-plus-preposition case. "You tried to use cat on {{target}}" is the
+// hint referencing the error the child just saw -- which the authoring prompt
+// asks for -- and no shell runs `cat on X`. Before this, the rule rejected that
+// phrasing on all eight candidates for cat/Is_A_Directory in one run.
+test("the No-Do predicate reads a preposition after the verb as prose", () => {
+  assert.equal(findRunnableCommand("You tried to use cat on {{target}}, but it is a folder."), null)
+  assert.equal(findRunnableCommand("You used cd to get in here."), null)
+  // Still caught: a real argument after the verb, preposition or not.
+  assert.ok(findRunnableCommand("Try running ls caves to see what is there."))
+  assert.ok(findRunnableCommand("Use cd rocks instead."))
+  assert.ok(findRunnableCommand("Type cat notes.txt now."))
 })

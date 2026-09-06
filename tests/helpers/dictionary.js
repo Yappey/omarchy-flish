@@ -95,6 +95,7 @@ export function coverage() {
 // that requires target_near_sibling -- nothing else guarantees such a name
 // exists, and a hint that renders a hole is worse than one that never fires.
 export const PLACEHOLDERS = new Set(["target", "near"])
+export const DEFAULT_MIN_STRIKE = 3
 
 export function placeholderProblems(template, slot) {
   const problems = []
@@ -106,10 +107,23 @@ export function placeholderProblems(template, slot) {
     problems.push(
       `{{target}} would render empty on ${slotKey(slot.command, slot.status)}`)
   }
-  if (body.includes("{{near}}") && template.requires?.target_near_sibling !== true) {
-    problems.push(
-      `{{near}} needs "target_near_sibling": true in requires; without it the ` +
-      `engine has no near name and the sentence renders with a hole in it`)
+  if (body.includes("{{near}}")) {
+    if (template.requires?.target_near_sibling !== true) {
+      problems.push(
+        `{{near}} needs "target_near_sibling": true in requires; without it the ` +
+        `engine has no near name and the sentence renders with a hole in it`)
+    }
+    // Naming the correction ends the child's thinking, so it is the second
+    // hint, not the first: they get a turn to spot it themselves at the default
+    // min_strike, and only if that does not land does a blunter template name
+    // it. Two templates with the same requires, separated by min_strike, is the
+    // shape slots.test.js already sanctions for exactly this.
+    if ((template.min_strike ?? DEFAULT_MIN_STRIKE) <= DEFAULT_MIN_STRIKE) {
+      problems.push(
+        `{{near}} hands over the answer, so it belongs to a blunter second ` +
+        `hint: raise min_strike above ${DEFAULT_MIN_STRIKE} and pair it with a ` +
+        `template that asks them to spot it first`)
+    }
   }
   return problems
 }

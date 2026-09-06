@@ -354,3 +354,33 @@ publisher recommends; drafting is not what they recommend it for.
 several is to have something to choose between. Every `cat/Bad_Usage` candidate
 at 0.2 is a paraphrase of every other. Raise it deliberately when the goal is
 range rather than a measurement — but do not compare two runs across it.
+
+## D19 — `{{near}}` is the second hint, and the tier is an input
+
+A hint may name the correction a child almost typed — "did you mean {{near}}?" —
+only at a `min_strike` above the default 3, paired with a gentler template at 3
+that asks them to spot it themselves.
+
+**Why:** review asked four times for copy that shows the name, and D14 forbids
+handing over an argument. Both are right about different moments. The first time
+a child misspells a name, working out which one they meant is the lesson; the
+third time, they are stuck and the lesson has failed. Two templates with the same
+`requires`, separated by `min_strike`, is the shape `slots.test.js` already
+sanctions and that no shipped template exercised.
+
+**The tier is chosen by the drafter, not the model.** Told in the payload that
+`{{near}}` needs a raised `min_strike`, gemma-4-26b wrote `{{near}}` at
+`min_strike` 3 on all sixteen candidates across two slots — the authoring
+prompt's own "min_strike is 3 unless this is a blunter second hint" competes and
+wins. `draft.py --min-strike` makes it an input, and the payload then says only
+what is allowed at that tier. Yield went 0/8 to 6/6.
+
+That is the same lesson as D17 twice over: a rule the model must *infer from a
+conflict* does not survive, and moving `grounding_rules` from the end of the
+payload to beside `applicable_decorators` — nothing else — took `cat/Bad_Usage`
+from 1/8 to 8/8. Position, not just presence.
+
+**Cost:** the pair is a design that the tools do not enforce. Nothing checks that
+a blunt template has a gentle partner, so a slot can ship with only the
+answer-giving half. That is a coverage question the reachability work has not
+been extended to yet.

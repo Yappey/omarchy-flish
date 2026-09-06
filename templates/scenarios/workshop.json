@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "id": "workshop",
+  "name": "The Workshop",
+  "description": "The only world starting the child where files and folders sit side by side, so cwd_has_files is true on turn one. One misspellable file, one misspellable folder, an empty room, and a name in the parent.",
+  "cwd": "/workshop",
+  "entries": [
+    {
+      "name": "workshop",
+      "kind": "dir",
+      "entries": [
+        {
+          "name": "blueprint.txt",
+          "kind": "file",
+          "content": "A machine for folding paper cranes. Step one is missing.\n"
+        },
+        {
+          "name": "toolbox",
+          "kind": "dir",
+          "entries": [
+            {
+              "name": "hammer.txt",
+              "kind": "file",
+              "content": "Heavy end goes down. Everyone learns this once.\n"
+            },
+            {
+              "name": "wrench.txt",
+              "kind": "file",
+              "content": "Turns bolts. Also good for propping doors open.\n"
+            }
+          ]
+        },
+        {
+          "name": "scrapheap",
+          "kind": "dir",
+          "entries": []
+        },
+        {
+          "name": "notes.txt",
+          "kind": "file",
+          "content": "Ideas so far: a quieter clock, a kite that steers.\n"
+        }
+      ]
+    },
+    {
+      "name": "garden",
+      "kind": "dir",
+      "entries": [
+        {
+          "name": "seeds.txt",
+          "kind": "file",
+          "content": "Sunflowers by the fence. Beans where the sun lands first.\n"
+        }
+      ]
+    }
+  ]
+}

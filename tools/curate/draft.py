@@ -257,7 +257,7 @@ def scenario_context(slot):
     return {"cwd": world["cwd"], "here": world["here"], "target": target}
 
 
-def build_input(slot):
+def build_input(slot, min_strike=3):
     manifest = load(SLOTS)
     decorators = manifest.get("decorators", {})
     forbidden = manifest.get("forbidden_vocabulary", {}).get("words", [])
@@ -294,40 +294,76 @@ def build_input(slot):
         # output shape outright: gemma-4-26b went from drafting single templates
         # to emitting {"hints": [...]} on 7 of 8 replies. The prose section is
         # full. Structured input is where this model still reads carefully.
-        "placeholders": placeholders_for(slot),
-        "strike_count": 3,
+        "placeholders": placeholders_for(slot, min_strike),
+        "min_strike": min_strike,
+        "strike_count": min_strike,
     }
     if slot["has_target"]:
         payload["target"] = ctx["target"]
     else:
-        # The gate's one truth rule, stated as a rule. Without a target the copy
-        # can only be pointing at what is lying around, and the decorator is the
-        # only thing that says anything is. Descriptions alone did not carry it:
-        # every candidate asked "which file did you mean?" on a slot whose
-        # requires said nothing about files.
-        payload["grounding_rules"] = [
+        # The gate's one truth rule, stated as a rule, and placed next to the
+        # decorators it is about rather than at the end of the object. Without a
+        # target the copy can only be pointing at what is lying around, and the
+        # decorator is the only thing that says anything is.
+        #
+        # Position turned out to matter as much as presence. Stated last, with
+        # three worlds in the payload instead of two, it was ignored on 15 of 16
+        # candidates across the two Bad_Usage slots -- the same displacement that
+        # made the prompt the wrong channel for a rule in the first place (D17).
+        payload = reorder_after(payload, "applicable_decorators", "grounding_rules", [
             'Writing "which file" or "what file" requires "cwd_has_files": true'
             ' in your requires.',
             'Writing "which folder" or "what folder" requires "cwd_has_dirs":'
             ' true in your requires.',
-        ]
+            'These two override "fewer decorators is better". A decorator named'
+            ' here is not an extra one: it is what makes the question true, and'
+            ' the candidate is rejected without it.',
+        ])
     return payload
 
 
-def placeholders_for(slot):
-    """What the body may interpolate, and what each one costs to use.
+def reorder_after(payload, anchor, key, value):
+    """Insert `key` immediately after `anchor`, preserving order otherwise."""
+    out = {}
+    for name, existing in payload.items():
+        out[name] = existing
+        if name == anchor:
+            out[key] = value
+    if key not in out:
+        out[key] = value
+    return out
+
+
+def placeholders_for(slot, min_strike=3):
+    """What the body may interpolate at this tier, and what each one costs.
 
     Mirrors placeholderProblems in tests/helpers/dictionary.js. A placeholder is
     legal only where the engine can guarantee a value, so {{near}} carries the
     decorator that guarantees it rather than being offered unconditionally.
+
+    The tier is an input rather than something the model works out. Told that
+    {{near}} needs a raised min_strike, gemma-4-26b wrote {{near}} at min_strike
+    3 on all sixteen candidates across two slots: the authoring prompt's own
+    "min_strike is 3 unless this is a blunter second hint" competes with it and
+    wins. Which tier is being drafted is an authoring decision anyway -- the pair
+    is designed, not discovered -- so the drafter picks it and the payload simply
+    says what is allowed here.
     """
     legal = {}
     if slot["has_target"]:
         legal["{{target}}"] = "The name the child typed. Always available here."
-    if "target_near_sibling" in slot["applicable_decorators"]:
+    if "target_near_sibling" not in slot["applicable_decorators"]:
+        return legal
+    if min_strike > DEFAULT_MIN_STRIKE:
         legal["{{near}}"] = ("The closest name that really is in the folder. "
-                             "Allowed only if your requires contains "
-                             "\"target_near_sibling\": true.")
+                             "This is the blunter second hint, so naming the "
+                             "correction outright is what it is for. Requires "
+                             "\"target_near_sibling\": true in your requires.")
+    else:
+        legal["{{never}}"] = ("NOT a placeholder. There is a second placeholder "
+                              "for the near-miss name, and at this min_strike you "
+                              "may not use it: ask the child to spot the close "
+                              "name themselves, never write it for them.")
     return legal
 
 
@@ -487,6 +523,8 @@ def looks_degenerate(candidate):
     return "match" not in candidate and "body" not in candidate
 
 
+DEFAULT_MIN_STRIKE = 3
+
 REPAIRABLE = ("schema_version", "id", "match", "requires", "min_strike",
               "title", "body", "ttl_ms")
 
@@ -498,7 +536,7 @@ INPUT_ECHO = ("concept", "has_target", "example_world", "all_worlds",
               "forbidden_words", "applicable_decorators", "strike_count")
 
 
-def repair(candidate):
+def repair(candidate, min_strike=DEFAULT_MIN_STRIKE):
     """Fix what is only formatting, and report what was fixed.
 
     A generation costs a model call; throwing one away because the id had an
@@ -520,11 +558,18 @@ def repair(candidate):
         candidate.pop(key)
         fixed.append(f"dropped unknown field {key!r}")
 
-    match = candidate.get("match")
-    if isinstance(match, dict):
-        for key in [k for k in match if k in INPUT_ECHO]:
-            match.pop(key)
-            fixed.append(f"dropped echoed input field match.{key!r}")
+    # Same echo, either place it lands. `requires: {"has_target": false}` came
+    # back on all eight candidates for one slot: has_target is a field of the
+    # brief, not a decorator, so the copy cannot be leaning on it and dropping it
+    # launders nothing -- the grounding rule then rejects the body on its own
+    # merits, which is the feedback that was being hidden.
+    for field in ("match", "requires"):
+        section = candidate.get(field)
+        if not isinstance(section, dict):
+            continue
+        for key in [k for k in section if k in INPUT_ECHO]:
+            section.pop(key)
+            fixed.append(f"dropped echoed input field {field}.{key!r}")
 
     raw_id = str(candidate.get("id", ""))
     kebab = re.sub(r"-+", "-", re.sub(r"[^a-z0-9]+", "-", raw_id.lower())).strip("-")
@@ -545,7 +590,9 @@ def repair(candidate):
         candidate["requires"]["argv_count"] = int(count)
         fixed.append(f"argv_count {count!r} -> {int(count)}")
 
-    for field, default in (("min_strike", 3), ("ttl_ms", 14000)):
+    # The tier is what was asked for, not the schema default: filling in 3 on a
+    # blunt-tier draft would silently turn it back into a first hint.
+    for field, default in (("min_strike", min_strike), ("ttl_ms", 14000)):
         if field not in candidate:
             candidate[field] = default
             fixed.append(f"{field} defaulted to {default}")
@@ -562,7 +609,7 @@ def gate(candidate_path):
 def draft_slot(slot, args):
     key = slot_key(slot)
     print(f"\n=== {key} ===")
-    payload = build_input(slot)
+    payload = build_input(slot, args.min_strike)
     system = PROMPT.read_text()
     OUT.mkdir(parents=True, exist_ok=True)
 
@@ -617,7 +664,9 @@ def draft_slot(slot, args):
         # the first. --structured sends no reasoning setting at all, so
         # labelling those files r-off would be a lie about what was requested.
         mode = run_mode(args)
-        stem = f'{key.replace("/", "-").replace("*", "any")}.{model_tag(args.model)}.{mode}'
+        tier = "" if args.min_strike == DEFAULT_MIN_STRIKE else f".s{args.min_strike}"
+        stem = (f'{key.replace("/", "-").replace("*", "any")}'
+                f'.{model_tag(args.model)}.{mode}{tier}')
 
         if candidate is None:
             print(f"  [{i}] no JSON in the reply")
@@ -636,7 +685,7 @@ def draft_slot(slot, args):
 
         candidate.setdefault("schema_version", 1)
         candidate.setdefault("id", f"{stem.lower()}-{i}")
-        candidate, fixed = repair(candidate)
+        candidate, fixed = repair(candidate, args.min_strike)
         if fixed:
             print(f"  [{i}] repaired: {'; '.join(fixed)}")
         path = OUT / f"{stem}.{i}.json"
@@ -686,6 +735,12 @@ def main():
                     help="also constrain the decoder to the hint schema. Separate "
                          "from --endpoint: worth it for a model that cannot be "
                          "trusted to emit JSON, unnecessary for most.")
+    ap.add_argument("--min-strike", type=int, default=3,
+                    help="which tier to draft. 3 is the first hint a child sees. "
+                         "Above 3 is the blunter follow-up for one the first did "
+                         "not reach -- the only tier where {{near}} may name the "
+                         "correction outright. Draft both and review them as a "
+                         "pair; same requires, separated by this.")
     ap.add_argument("--temperature", type=float, default=None,
                     help="override the model card's temperature. The cards "
                          "recommend settings for open-ended chat -- Gemma 4 "

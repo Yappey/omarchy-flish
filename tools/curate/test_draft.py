@@ -196,3 +196,21 @@ class RepairTest(unittest.TestCase):
     def test_keeps_stderr_in_match_because_the_schema_knows_it(self):
         fixed, _ = draft.repair({"id": "x", "match": {"command": "ls", "stderr": "no such"}})
         self.assertEqual(fixed["match"]["stderr"], "no such")
+
+    def test_drops_input_metadata_echoed_into_requires(self):
+        fixed, notes = draft.repair({"id": "x", "requires": {"has_target": False}})
+        self.assertEqual(fixed["requires"], {})
+        self.assertTrue(any("requires.'has_target'" in n for n in notes))
+
+    def test_still_keeps_an_invented_decorator_for_the_gate(self):
+        # The copy may be leaning on it, so this one is not ours to delete.
+        fixed, _ = draft.repair({"id": "x", "requires": {"cwd_smells_nice": True}})
+        self.assertEqual(fixed["requires"], {"cwd_smells_nice": True})
+
+    def test_defaults_min_strike_to_the_tier_being_drafted(self):
+        fixed, _ = draft.repair({"id": "x"}, min_strike=5)
+        self.assertEqual(fixed["min_strike"], 5)
+
+    def test_does_not_overwrite_a_min_strike_the_model_chose(self):
+        fixed, _ = draft.repair({"id": "x", "min_strike": 7}, min_strike=5)
+        self.assertEqual(fixed["min_strike"], 7)

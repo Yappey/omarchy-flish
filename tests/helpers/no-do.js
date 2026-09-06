@@ -57,9 +57,16 @@ export function findRunnableCommand(body) {
   // One optional word between the instruction and the command, so "try running
   // ls x" reads the same as "type ls x". Gerunds included; "used cd, but..." is
   // still safe because a trailing comma fails the argument match.
+  //
+  // A preposition after the verb makes it prose, not a command line: no shell
+  // runs `cat on notes.txt`, and "you tried to use cat on {{target}}" is the
+  // hint referencing the error the child just saw, which the authoring prompt
+  // asks for. Without this the rule rejected that phrasing on every candidate
+  // for a whole slot.
+  const PROSE_AFTER_VERB = "on|in|into|at|to|from|with|for|about|inside|instead|and|or"
   const instructed = text.match(new RegExp(
     `\\b(?:use|using|type|typing|run|running|enter|entering|try|trying|write|writing|execute|executing)`
-    + `\\s+(?:\\w+\\s+)?["'\`]?(${ALL_VERBS})\\s+\\S`, "i"))
+    + `\\s+(?:\\w+\\s+)?["'\`]?(${ALL_VERBS})\\s+(?!(?:${PROSE_AFTER_VERB})\\b)\\S`, "i"))
   if (instructed) return `"${instructed[1]}" handed over after an instruction to type it`
 
   for (const verb of HARD_VERBS) {
