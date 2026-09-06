@@ -124,6 +124,34 @@ rejects are kept next to their reason. Survivors land in
 `tools/curate/candidates/` (gitignored) and reach `templates/hints/` only when a
 person moves one there.
 
+**The ceiling breaks at 26B, and constrained decoding buys more than
+well-formedness.** `gemma-4-26b-a4b-qat`, run three ways on the same two slots:
+
+| Run | Score | Time | `requires` on cat/Is_A_Directory |
+|---|---|---|---|
+| `--structured`, card sampling | **7/7** | 14m20s | correctly omitted, 3 of 3 |
+| native, card sampling | 6/7 | **35s** | gratuitous decorator, 3 of 3 |
+| native, server defaults (earlier) | 7/7 | ~40s | gratuitous decorator, 3 of 3 |
+
+Two things separate cleanly here. The **14 minutes is entirely constrained
+decoding** -- the native path with identical sampling took 35 seconds, so
+temperature 1.0 is not the cost. And the **decorator discipline tracks the
+endpoint, not the sampling**: both native runs attached `target_is_empty_dir`
+to every cat candidate while no body mentioned emptiness, and the structured run
+attached it to none.
+
+That is worth more than it sounds. An unnecessary decorator inflates the
+specificity score that decides precedence, and **no gate rule catches it** -- it
+is one of the judgement calls left to a reader. Constrained decoding appears to
+suppress it, plausibly because an optional field must be actively chosen under a
+grammar rather than pattern-matched from the `applicable_decorators` list in the
+prompt. Six native candidates across two sampling configurations versus three
+structured ones is a small sample, but the direction is consistent.
+
+So the trade is 24x wall time for one extra candidate **and** a quality defect
+the gate cannot see. For bulk drafting that is probably worth it; for iterating
+on a prompt it is not.
+
 **At 4B and under there is a ceiling, and it is not a formatting problem.**
 Three models, three architectures (phi3, hybrid Mamba2-Transformer, qwen3), both
 paths where the model supports both:
