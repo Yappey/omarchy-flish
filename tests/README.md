@@ -140,6 +140,22 @@ endpoint, not the sampling**: both native runs attached `target_is_empty_dir`
 to every cat candidate while no body mentioned emptiness, and the structured run
 attached it to none.
 
+**Constrained decoding fixes shape, not meaning.** `muse-glimmer` makes the
+distinction sharp. Under `--structured` it omitted the optional `requires` on
+all three cat candidates, exactly as gemma did -- and still wrote scenario
+filenames into three of seven bodies, which is the failure it is worst at.
+
+| Defect | Example | Under a grammar |
+|---|---|---|
+| **structural** -- whether an optional field appears | gratuitous `target_is_empty_dir` | suppressed |
+| **content** -- which words fill a string | `secret_map.txt` instead of `{{target}}` | unaffected |
+
+A JSON schema can say "requires is optional" and that changes what the decoder
+does with it. It cannot say "this string must not contain a name from the
+scenario". So constrained decoding is worth reaching for against the first kind
+and is no help at all against the second -- which is most of what the gate and
+the reviewer are for.
+
 That is worth more than it sounds. An unnecessary decorator inflates the
 specificity score that decides precedence, and **no gate rule catches it** -- it
 is one of the judgement calls left to a reader. Constrained decoding appears to
