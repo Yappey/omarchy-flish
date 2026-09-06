@@ -74,6 +74,26 @@ class ResolveReasoning(unittest.TestCase):
             draft.resolve_reasoning("http://127.0.0.1:0", "nope/nope", None))
 
 
+class DegenerateReplies(unittest.TestCase):
+    """An endpoint that suits one model can produce nothing usable from another,
+    and that must not read as bad copy."""
+
+    def test_generic_json_is_degenerate(self):
+        self.assertTrue(draft.looks_degenerate({"ok": True}))
+        self.assertTrue(draft.looks_degenerate({}))
+        self.assertTrue(draft.looks_degenerate({"schema_version": 1, "id": "x"}))
+
+    def test_a_real_attempt_is_not(self):
+        self.assertFalse(draft.looks_degenerate(
+            {"match": {"command": "cat"}, "title": "t", "body": "Why?"}))
+        # A body alone is still an attempt -- match can be filled in later.
+        self.assertFalse(draft.looks_degenerate({"body": "Which command lists it?"}))
+
+    def test_non_dict_is_degenerate(self):
+        self.assertTrue(draft.looks_degenerate(None))
+        self.assertTrue(draft.looks_degenerate([1, 2]))
+
+
 class ModelProfiles(unittest.TestCase):
     """Every card recommends different sampling; none match server defaults."""
 

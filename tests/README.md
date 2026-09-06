@@ -204,6 +204,22 @@ The native path's speed is not free either — it was fast because it was
 producing short, unconsidered completions. Engaging with the task takes longer
 and is what you want.
 
+**But the right endpoint is per model, not global.** `qwen3.8-27b` reverses
+the qwen3.6 result exactly: through the messages endpoint it answers the
+authoring prompt with `{"ok": true}`, and through the native fields it produces
+real hints.
+
+| Model | native fields | messages |
+|---|---|---|
+| `qwen3.6-35b-a3b` | 1/7 | **5/7** |
+| `qwen3.8-27b` | **3/7** in 46s | degenerate `{"ok": true}` |
+
+So there is no globally better request shape, and `messages` is the default only
+because it suits more of the models tried. When a model is producing nothing
+usable, change `--endpoint` before touching the prompt: `draft.py` now detects a
+reply that parses as JSON but contains neither `match` nor `body`, and says so
+rather than letting it land as a schema rejection that reads like bad copy.
+
 `--endpoint` and `--structured` are separate flags now. Messages is the default;
 the grammar is worth turning on only for a model that cannot be trusted to emit
 JSON, which so far means `phi-4-mini-reasoning` and nothing else.

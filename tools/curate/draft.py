@@ -396,6 +396,20 @@ def extract_json(text):
     return parsed[-1]
 
 
+def looks_degenerate(candidate):
+    """True when a reply parsed as JSON but is not an attempt at the task.
+
+    qwen3.8-27b answers the authoring prompt with {"ok": true} through the
+    messages endpoint and with real hints through the native one, so an endpoint
+    that suits one model can produce nothing usable from another. Without this
+    check that shows up as a schema rejection and reads like bad copy, which
+    sends you tuning a prompt when the request shape is what is wrong.
+    """
+    if not isinstance(candidate, dict):
+        return True
+    return "match" not in candidate and "body" not in candidate
+
+
 def gate(candidate_path):
     proc = subprocess.run(["node", str(VALIDATOR), str(candidate_path)],
                           capture_output=True, text=True)
@@ -410,6 +424,7 @@ def draft_slot(slot, args):
     OUT.mkdir(parents=True, exist_ok=True)
 
     kept = 0
+    degenerate = 0
     for i in range(1, args.n + 1):
         try:
             kwargs = {"sampling": args.sampling, "timeout": args.timeout}
@@ -469,6 +484,13 @@ def draft_slot(slot, args):
             print(f"  [{i}] model declined (empty object) -- an acceptable answer")
             continue
 
+        if looks_degenerate(candidate):
+            degenerate += 1
+            print(f"  [{i}] reply is JSON but not an attempt at the task: "
+                  f"{json.dumps(candidate)[:70]}")
+            (OUT / f"{stem}.{i}.reject.txt").write_text(text or "(empty)")
+            continue
+
         candidate.setdefault("schema_version", 1)
         candidate.setdefault("id", f"{stem.lower()}-{i}")
         path = OUT / f"{stem}.{i}.json"
@@ -482,6 +504,12 @@ def draft_slot(slot, args):
             path.rename(OUT / f"{stem}.{i}.reject.json")
             (OUT / f"{stem}.{i}.reject.txt").write_text(report + "\n")
             print(f"  [{i}] reject: {report.splitlines()[0] if report else '?'}")
+
+    if degenerate and degenerate >= args.n / 2:
+        other = "native" if args.endpoint == "messages" else "messages"
+        print(f"  ! {degenerate}/{args.n} replies were JSON but not attempts at the task.")
+        print(f"    That usually means the request shape does not suit this model.")
+        print(f"    Try --endpoint {other} before changing the prompt.")
     return kept
 
 
