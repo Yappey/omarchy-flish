@@ -173,6 +173,22 @@ So the trade is 24x wall time for one extra candidate **and** a quality defect
 the gate cannot see. For bulk drafting that is probably worth it; for iterating
 on a prompt it is not.
 
+**26-31B, structured, under the full gate.** `gemma-4-31b` was interrupted
+partway (the machine ran out of RAM and the model was unloaded), so its row is a
+partial:
+
+| Model | Structured | Time | Native |
+|---|---|---|---|
+| `gemma-4-26b-a4b-qat` | **7/7** | 14m20s | 6/7 in 35s |
+| `gemma-4-31b` | 4/4 completed, run cut short | 16m9s | not run |
+| `muse-glimmer` 28B | 4/7 | 22m36s | 2/7 in 8m17s |
+
+`gemma-4-31b` matched the 26B MoE on both judgement axes over the four it
+finished -- `requires` correctly omitted on all three cat candidates, and
+`target_near_sibling` used where the copy depends on it. On this evidence the
+MoE is the better choice regardless: same quality, less wall time, and far less
+memory for a machine that has to hold the model and a desktop at once.
+
 **At 4B and under there is a ceiling, and it is not a formatting problem.**
 Three models, three architectures (phi3, hybrid Mamba2-Transformer, qwen3), both
 paths where the model supports both:

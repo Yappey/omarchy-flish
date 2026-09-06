@@ -408,10 +408,18 @@ def draft_slot(slot, args):
             # The server answered and said no. It will say no identically to
             # every remaining candidate, so stop -- but surface what it said,
             # which is usually the whole explanation.
+            # Fall back to the raw body rather than nothing. A bare status code
+            # sends you looking in the wrong place -- this handler once printed
+            # "(HTTP 400)" for what turned out to be a model being unloaded
+            # mid-request, which the body would have said outright.
+            raw = b""
             try:
-                detail = json.loads(exc.read()).get("error", {}).get("message", "")
+                raw = exc.read()
+                detail = json.loads(raw).get("error", {}).get("message", "")
             except Exception:  # noqa: BLE001 - diagnostics must not mask the error
                 detail = ""
+            if not detail and raw:
+                detail = raw.decode("utf-8", "replace").strip()[:200]
             print(f"  [{i}] rejected by LM Studio (HTTP {exc.code})"
                   + (f": {detail}" if detail else ""))
             return kept
