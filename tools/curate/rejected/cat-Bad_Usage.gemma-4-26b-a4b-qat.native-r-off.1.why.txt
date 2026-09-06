@@ -1,0 +1,1 @@
+you didn't tell cat which file you wanted to read" correctly explains why cat failed syntactically. However, "which file did you mean to open?" is false in the context of The Lighthouse (cwd /). There are no files in the root directory—only directories (lighthouse/ and rocks/). Prompting the learner to name a file implies one is immediately available to open, which is untrue.

@@ -1,0 +1,1 @@
+The copy is factually true that `{{target}}` is a directory, but it traps the learner by asking how to list an empty folder (`target_is_empty_dir`) instead of explaining emptiness or pointing to `cd`, and the decorators fail because that gate contradicts the `ls` advice while `cwd_has_children` and `cwd_is_root` are unearned and omitted from `requires`.

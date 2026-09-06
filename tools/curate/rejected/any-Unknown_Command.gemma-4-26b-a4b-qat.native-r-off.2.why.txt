@@ -1,0 +1,1 @@
+The explanation is only literally true and pedagogically empty—it uses adult jargon like “not a valid executable,” never points the child toward `ls`/`cd` (or `cd lighthouse` when they typed a folder), and fails its decorator test because `cwd_has_children` is required but unused while the real discriminator (`target_is_child`/`target_is_dir` vs. a generic fallback) is missing.

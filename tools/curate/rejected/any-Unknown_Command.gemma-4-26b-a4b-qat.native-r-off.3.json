@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "verb-is-not-a-command",
+  "match": {
+    "command": "",
+    "status": "Unknown_Command"
+  },
+  "requires": {
+    "cwd_has_children": true
+  },
+  "min_strike": 3,
+  "title": "The word you entered is not a command",
+  "body": "You typed something that the machine does not recognize as a valid operation. Can you find the correct name for the command you want to run?",
+  "ttl_ms": 14000
+}

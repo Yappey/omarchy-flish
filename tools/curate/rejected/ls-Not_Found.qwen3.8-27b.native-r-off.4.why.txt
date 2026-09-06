@@ -1,0 +1,1 @@
+The copy is false in `/` because it claims a “similar file” exists when only folders do, it never shows `ls`/`cd` plus the name and may push the child into `cat` on a directory, and the decorators fail again: generic `target_near_sibling` instead of a file/dir gate, with `cwd_has_children`, `cwd_is_root`, and impossible `target_in_parent` unearned or omitted.

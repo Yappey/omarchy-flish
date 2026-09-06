@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "id": "directory-is-not-a-file",
+  "match": {
+    "command": "cat",
+    "status": "Is_A_Directory"
+  },
+  "min_strike": 3,
+  "title": "A directory is a folder, not a file",
+  "body": "The error says 'Is a directory'. Did you mean to read a file inside {{target}}?",
+  "ttl_ms": 14000
+}

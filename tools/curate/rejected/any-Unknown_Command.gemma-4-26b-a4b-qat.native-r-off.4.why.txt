@@ -1,0 +1,1 @@
+The explanation is only abstractly true and pedagogically empty—it never grounds the child in the Lighthouse world or points them to `ls`/`cd` (or `cd lighthouse` when they typed a folder name)—and its decorators fail because `cwd_has_children` is unearned, omitted from `requires`, and the rule lacks the identity it needs (generic typo fallback vs. “that name is a folder”).

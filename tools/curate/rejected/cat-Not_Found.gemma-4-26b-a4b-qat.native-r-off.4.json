@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "cat-not-found-typo-check",
+  "match": {
+    "command": "cat",
+    "status": "Not_Found"
+  },
+  "requires": {
+    "target_near_sibling": true
+  },
+  "min_strike": 3,
+  "title": "The file {{target}} was not found",
+  "body": "You searched for {{target}}, but it does not exist in this folder. Could you check your spelling or see if it is nearby?",
+  "ttl_ms": 14000
+}

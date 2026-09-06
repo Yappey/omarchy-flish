@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "cat-needs-a-file-name",
+  "match": {
+    "command": "cat",
+    "status": "Bad_Usage"
+  },
+  "requires": {
+    "argv_count": 0
+  },
+  "min_strike": 3,
+  "title": "cat needs a file name",
+  "body": "you gave it nothing to read. which file did you mean?",
+  "ttl_ms": 14000
+}

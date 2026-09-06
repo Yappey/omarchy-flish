@@ -1,0 +1,1 @@
+The copy is only vacuously true and gives no world-grounded help toward `ls` or `cd` (or `cd lighthouse` when they typed a folder name), and it misuses `cwd_has_children` by requiring children for a generic “unknown operation” message that never mentions them and lacks the decorator that would actually justify the rule.

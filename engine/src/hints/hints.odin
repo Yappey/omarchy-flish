@@ -44,6 +44,7 @@ Decorator :: struct {
 	target_is_file:      Maybe(bool),
 	cwd_has_children:    Maybe(bool),
 	target_near_sibling: Maybe(bool),
+	near_sibling_is_dir: Maybe(bool),
 	target_in_parent:    Maybe(bool),
 	cwd_is_root:         Maybe(bool),
 	target_is_empty_dir: Maybe(bool),
@@ -119,6 +120,7 @@ specificity :: proc(template: Template) -> (score: int) {
 	if _, ok := template.requires.target_is_file.?; ok do score += 1
 	if _, ok := template.requires.cwd_has_children.?; ok do score += 1
 	if _, ok := template.requires.target_near_sibling.?; ok do score += 1
+	if _, ok := template.requires.near_sibling_is_dir.?; ok do score += 1
 	if _, ok := template.requires.target_in_parent.?; ok do score += 1
 	if _, ok := template.requires.cwd_is_root.?; ok do score += 1
 	if _, ok := template.requires.target_is_empty_dir.?; ok do score += 1
@@ -202,6 +204,10 @@ satisfies :: proc(requires: Decorator, world: ^vfs.World, outcome: commands.Outc
 	}
 	if want, ok := requires.target_near_sibling.?; ok {
 		if vfs.has_near_sibling(world.cwd, name) != want do return false
+	}
+	if want, ok := requires.near_sibling_is_dir.?; ok {
+		sibling := vfs.near_sibling(world.cwd, name)
+		if (sibling != nil && sibling.kind == .Directory) != want do return false
 	}
 	if want, ok := requires.target_in_parent.?; ok {
 		if vfs.exists_in_parent(world.cwd, name) != want do return false

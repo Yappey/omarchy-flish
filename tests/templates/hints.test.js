@@ -170,6 +170,19 @@ test("the No-Do predicate catches known violations", () => {
   }
 })
 
+test("the No-Do predicate allows a named verb without its argument", () => {
+  // D3 relaxed: naming the verb does not give the answer away, because the
+  // child still has to supply the target. A verb with its argument attached
+  // does, and stays rejected by the cases above.
+  for (const ok of [
+    "That is a folder. Which command lists what is inside one -- ls?",
+    "cd moves you into a folder. Where do you want to go?",
+    "Is ls the tool for looking, or cd for moving?"
+  ]) {
+    assert.equal(findRunnableCommand(ok), null, `should have been allowed: ${ok}`)
+  }
+})
+
 test("the No-Do predicate allows Socratic prose that names commands", () => {
   const allowed = [
     "Which command shows you what is written inside something?",

@@ -197,42 +197,64 @@ def walk(entries, prefix=""):
             yield from walk(e.get("entries", []), path)
 
 
-def scenario_context(slot):
-    """A concrete world for the model to write against.
+def all_worlds():
+    """Every scenario, as the child actually meets it.
 
-    Hints are matched against VFS state, so a candidate written with no world in
-    mind tends to describe the error rather than the situation. Pick a directory
-    with children so `siblings` is meaningful, and a target of the kind this
-    slot implies.
+    A template is universally quantified over worlds that satisfy its
+    `requires`; it is not a description of one world. Showing the model a single
+    arbitrary directory taught it the opposite -- it wrote "which file did you
+    mean to read?" against a directory that had files, and that copy is false at
+    the root of the Lighthouse, where there are only folders. Every rejection
+    citing "false in /" traced back to here.
+
+    Worse, the scenario was picked with list(glob)[0], so which world the model
+    saw depended on filesystem order and could change between runs.
     """
-    files = list(SCENARIOS.glob("*.json"))
-    if not files:
-        return {"cwd": "/", "siblings": [], "target": "the_name_you_typed"}
+    worlds = []
+    for f in sorted(SCENARIOS.glob("*.json")):
+        s = load(f)
+        entries = list(walk(s["entries"]))
+        cwd = s["cwd"]
+        here = [e for p, e in entries
+                if p.rsplit("/", 1)[0] == ("" if cwd == "/" else cwd)]
+        worlds.append({
+            "scenario": s["id"],
+            "cwd": cwd,
+            "here": [{"name": e["name"], "kind": e["kind"]} for e in here],
+            "has_files": any(e["kind"] == "file" for e in here),
+            "has_dirs": any(e["kind"] == "dir" for e in here),
+        })
+    return worlds
 
-    scenario = load(files[0])
-    dirs = [(p, e) for p, e in walk(scenario["entries"]) if e["kind"] == "dir"]
-    best = max(dirs, key=lambda pe: len(pe[1].get("entries", [])), default=None)
-    if best is None:
-        return {"cwd": "/", "siblings": [], "target": "the_name_you_typed"}
 
-    cwd, node = best
-    children = node.get("entries", [])
-    siblings = [c["name"] for c in children]
+def scenario_context(slot):
+    """One concrete example, drawn from the scenario the child starts in.
 
+    Kept because copy written against no world at all describes the error
+    instead of the situation -- but labelled as one example among several, not
+    as the world.
+    """
+    worlds = all_worlds()
+    if not worlds:
+        return {"cwd": "/", "here": [], "target": "the_name_you_typed"}
+
+    world = worlds[0]
+    names = [e["name"] for e in world["here"]]
     want_dir = slot["status"] == "Is_A_Directory"
     want_file = slot["status"] == "Not_A_Directory"
-    target = None
-    for c in children:
-        if want_dir and c["kind"] == "dir":
-            target = c["name"]
-        elif want_file and c["kind"] == "file":
-            target = c["name"]
-    if target is None:
-        target = siblings[0] if siblings and slot["has_target"] else "the_name_you_typed"
-    if slot["status"] == "Not_Found":
-        target = "tresure_map.txt"   # a near-miss, which is the interesting case
 
-    return {"cwd": cwd, "siblings": siblings, "target": target}
+    target = None
+    for e in world["here"]:
+        if want_dir and e["kind"] == "dir":
+            target = e["name"]
+        elif want_file and e["kind"] == "file":
+            target = e["name"]
+    if target is None:
+        target = names[0] if names and slot["has_target"] else "the_name_you_typed"
+    if slot["status"] == "Not_Found":
+        target = "lighthosue"   # a near-miss, which is the interesting case
+
+    return {"cwd": world["cwd"], "here": world["here"], "target": target}
 
 
 def build_input(slot):
@@ -247,8 +269,13 @@ def build_input(slot):
         "stderr": stderr,
         "concept": slot["concept"],
         "has_target": slot["has_target"],
-        "cwd": ctx["cwd"],
-        "siblings": ctx["siblings"],
+        "example_world": {
+            "cwd": ctx["cwd"],
+            "here": ctx["here"],
+            "note": "ONE example. The copy must hold in every world below, not "
+                    "just this one.",
+        },
+        "all_worlds": all_worlds(),
         # Name and meaning, not just name. Handed a bare list, a model
         # generalises from the majority: every other decorator is a boolean, so
         # argv_count came back as `true` on every Bad_Usage candidate. The

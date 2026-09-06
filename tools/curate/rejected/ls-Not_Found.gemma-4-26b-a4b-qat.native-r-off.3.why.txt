@@ -1,0 +1,1 @@
+The title calls a nearby misspelling a “file name” when `/` only has folders, the body never shows `ls`/`cd` plus the name, and the decorators still fail: generic `target_near_sibling` instead of a file/dir gate, with `cwd_has_children`, `cwd_is_root`, and impossible `target_in_parent` unearned or omitted.

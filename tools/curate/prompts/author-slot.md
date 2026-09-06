@@ -48,11 +48,19 @@ booleans, but `argv_count` is an integer.
 These are not style preferences. A candidate that breaks one is rejected by
 `tests/validate-candidate.js` before a human sees it.
 
-- **Never write a command the child could copy.** Not in backticks, not as an
-  example, not "try ls". You may name a concept ("a command that lists things")
-  and you may name a command in prose ("cd walks into folders"), but never a
-  runnable line with an argument. If you cannot help without giving the answer,
-  return the empty object described below.
+- **Name the command, never the line.** Writing the bare verb is wanted: "which
+  command lists what is inside a folder -- ls?" or "cd moves you into a folder".
+  What is forbidden is a runnable line, meaning a verb with its argument
+  attached: "try ls lighthouse", "use 'cd rocks'". The child must still type the
+  target themselves; that is the whole of the No-Do rule, and naming the verb
+  does not give it away. No backticks -- the overlay renders plain text and they
+  appear literally.
+- **A hint is about every world, not the one in `example_world`.** It fires
+  wherever the slot and your `requires` hold, so anything the copy assumes must
+  be guaranteed by them. Check `all_worlds`: if a body says "look at the files
+  around you" and any listed world has only folders at its cwd, the copy is
+  false there and the hint is wrong. Either narrow `requires` until it is true,
+  or say something that holds everywhere.
 - **Never say the child is wrong, slow, or confused.** The error already said
   what happened; you are explaining what it means.
 - **Reference the actual error text** they just saw.

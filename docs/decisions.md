@@ -242,3 +242,42 @@ existence.
 slots, its hints) rather than one. That is the intended friction: `tokenize`
 already warns that every feature added is a concept a child can trip over, and
 a command shipped without hint coverage trips them with no help.
+
+## D14 — "No-Do" relaxed: name the verb, never the line
+
+A hint may now write a bare command verb — "which command lists what is inside a
+folder — `ls`?" — but still never a verb with its argument attached.
+
+**Why:** review of the first drafted batch rejected candidate after candidate for
+being true but useless. "Which command shows you what is written inside
+something?" names a concept a child cannot act on when they do not yet know the
+vocabulary. Naming the verb does not give the answer away, because the target is
+the part they have to work out and type.
+
+**What is unchanged:** `ls lighthouse`, `cd rocks`, `use 'cat notes.txt'` are all
+still rejected, in the body and the title, quoted or introduced by an
+instruction to type them. The child still supplies the argument, which is the
+part that requires understanding where they are.
+
+**Cost:** the line is finer than "no commands" and needs the predicate to hold
+it. Two tests pin both sides — a named verb passes, a verb with an argument does
+not — because this is the rule most likely to drift back under pressure to be
+helpful.
+
+## D15 — A template is about every world, not the one it was drafted against
+
+The drafting input showed the model one directory and it wrote copy true of that
+directory. Against the Lighthouse, whose root holds only folders, "which file did
+you mean to read?" is false — and most of the first batch was rejected for
+exactly that.
+
+**Why it matters beyond drafting:** a template is universally quantified over
+worlds satisfying its `requires`. Anything the copy assumes must be guaranteed by
+the slot or a decorator, or the hint is wrong somewhere it can fire. That is also
+why an under-specified `requires` is worse than an over-specified one: the
+over-specified hint merely fires rarely, the under-specified one fires and lies.
+
+**How it is enforced:** the drafting input now carries every scenario's starting
+cwd and what is in it, labels the concrete example as one example, and the prompt
+says to check the copy against all of them. Nothing mechanical catches a
+violation yet — it remains the first of the three review questions.

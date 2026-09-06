@@ -9,7 +9,8 @@
     "target_in_parent": "The name that was not found here does exist one level up -- the wrong-room case.",
     "cwd_is_root": "The child is at the top of the tree, so there is no further up to go.",
     "target_is_empty_dir": "The first argument resolves to a directory with nothing in it.",
-    "argv_count": "How many arguments the verb was given. An integer, not a boolean."
+    "argv_count": "How many arguments the verb was given. An integer, not a boolean.",
+    "near_sibling_is_dir": "The near-miss sibling is a directory rather than a file. Only meaningful alongside target_near_sibling."
   },
   "slots": [
     {
@@ -33,6 +34,7 @@
       "applicable_decorators": [
         "cwd_has_children",
         "target_near_sibling",
+        "near_sibling_is_dir",
         "target_in_parent",
         "cwd_is_root"
       ]
@@ -58,6 +60,7 @@
       "applicable_decorators": [
         "cwd_has_children",
         "target_near_sibling",
+        "near_sibling_is_dir",
         "target_in_parent",
         "cwd_is_root"
       ]
@@ -82,6 +85,7 @@
       "applicable_decorators": [
         "cwd_has_children",
         "target_near_sibling",
+        "near_sibling_is_dir",
         "target_in_parent",
         "cwd_is_root"
       ]

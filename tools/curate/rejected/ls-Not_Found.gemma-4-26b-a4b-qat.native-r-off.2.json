@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "file-name-not-found-error",
+  "match": {
+    "command": "ls",
+    "status": "Not_Found"
+  },
+  "requires": {
+    "target_near_sibling": true
+  },
+  "min_strike": 3,
+  "title": "The filename does not exist",
+  "body": "You are looking for {{target}}, but it is not in this directory. Is it spelled correctly?",
+  "ttl_ms": 14000
+}

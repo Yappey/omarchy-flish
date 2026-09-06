@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "cat-error-is-a-directory-caves",
+  "match": {
+    "command": "cat",
+    "status": "Is_A_Directory"
+  },
+  "requires": {
+    "target_is_empty_dir": true
+  },
+  "min_strike": 3,
+  "title": "cannot cat a directory",
+  "body": "you tried to read {{target}} as a file, but it is a directory. how can you view the contents of a directory instead of its individual files?",
+  "ttl_ms": 14000
+}

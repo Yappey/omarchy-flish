@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "cat-directory-vs-file",
+  "match": {
+    "command": "cat",
+    "status": "Is_A_Directory"
+  },
+  "requires": {
+    "target_is_empty_dir": true
+  },
+  "min_strike": 3,
+  "title": "cat reads files, not folders",
+  "body": "The error says {{target}} is a directory. Since it is empty, what tool would you use to see its contents?",
+  "ttl_ms": 14000
+}

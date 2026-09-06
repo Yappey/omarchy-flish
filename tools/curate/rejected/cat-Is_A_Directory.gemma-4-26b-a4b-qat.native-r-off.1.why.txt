@@ -1,0 +1,1 @@
+The copy is misleading because it tells the child to view contents of an empty directory (`rocks/` under `target_is_empty_dir`) instead of explaining emptiness or pointing to `cd rocks`, and the decorators fail through that inverted gate, unearned omitted `cwd_has_children`/`cwd_is_root`, and leftover Caves metadata.

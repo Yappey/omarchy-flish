@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "target-name-not-found-in-current-directory",
+  "match": {
+    "command": "ls",
+    "status": "Not_Found"
+  },
+  "requires": {
+    "target_near_sibling": true
+  },
+  "min_strike": 3,
+  "title": "The file name is incorrect",
+  "body": "You are looking for {{target}}, but it does not exist in this directory. Is it possible you misspelled the name?",
+  "ttl_ms": 14000
+}

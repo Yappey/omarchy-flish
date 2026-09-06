@@ -162,14 +162,30 @@ is_root :: proc(world: ^World, node: ^Node) -> bool {
 // Distance 1 for short names, 2 for longer ones: on a four-letter name, two
 // edits is most of the word and stops being a typo.
 has_near_sibling :: proc(dir: ^Node, name: string) -> bool {
-	if !is_dir(dir) || name == "" do return false
+	return near_sibling(dir, name) != nil
+}
+
+// near_sibling returns the closest plausible typo of `name` in `dir`, or nil.
+//
+// Callers need the node and not just a yes: almost-typing a folder name and
+// almost-typing a file name are different lessons. The first means walk into
+// it; the second means fix the spelling and read it again. A decorator that
+// cannot tell them apart sends a child to retry `cat` on a directory.
+near_sibling :: proc(dir: ^Node, name: string) -> ^Node {
+	if !is_dir(dir) || name == "" do return nil
 	limit := len(name) <= 4 ? 1 : 2
 
+	best: ^Node
+	best_distance := limit + 1
 	for child in dir.children {
 		if child.name == name do continue
-		if edit_distance(child.name, name) <= limit do return true
+		distance := edit_distance(child.name, name)
+		if distance <= limit && distance < best_distance {
+			best = child
+			best_distance = distance
+		}
 	}
-	return false
+	return best
 }
 
 // exists_in_parent reports whether the name the child asked for is one level

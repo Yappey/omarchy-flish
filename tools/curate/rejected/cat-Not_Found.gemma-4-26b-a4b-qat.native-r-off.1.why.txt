@@ -1,0 +1,1 @@
+The wording is literally true and avoids saying “file,” but it still frames a near-sibling folder typo as a spelling fix for `cat`, trapping the child in `Is a directory` instead of `cd`, and the decorator contract fails: `target_near_sibling` is not type-split, while `cwd_has_children`, `cwd_is_root`, and impossible `target_in_parent` are unearned or omitted.

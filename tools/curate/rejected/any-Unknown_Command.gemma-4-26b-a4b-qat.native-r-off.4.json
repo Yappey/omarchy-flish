@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "id": "command-not-found-concept-explanation",
+  "match": {
+    "command": "",
+    "status": "Unknown_Command"
+  },
+  "title": "command not found",
+  "body": "you used a word that is not a known command. do you know the correct verb to use in the terminal?",
+  "ttl_ms": 14000
+}

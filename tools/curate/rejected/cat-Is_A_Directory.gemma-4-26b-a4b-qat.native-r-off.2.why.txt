@@ -1,0 +1,1 @@
+The copy only restates that `{{target}}` is a directory and quizzes the child instead of explaining emptiness or pointing to `cd`, so it gives no useful next step, and the decorators fail because `target_is_empty_dir` is unused by the text while `cwd_has_children` and `cwd_is_root` are unearned and omitted from `requires`.

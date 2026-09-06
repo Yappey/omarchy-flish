@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "typo-in-filename",
+  "match": {
+    "command": "ls",
+    "status": "Not_Found"
+  },
+  "requires": {
+    "target_near_sibling": true
+  },
+  "min_strike": 3,
+  "title": "That name is not in this folder",
+  "body": "The error says {{target}} is missing, but a similar file exists here. Does the name you typed match the one in the list?",
+  "ttl_ms": 14000
+}

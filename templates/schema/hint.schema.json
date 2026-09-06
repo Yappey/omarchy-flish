@@ -80,6 +80,10 @@
           "type": "integer",
           "minimum": 0,
           "description": "Exact argument count. Separates 'you gave none' from 'you gave three', which are different lessons at the same status."
+        },
+        "near_sibling_is_dir": {
+          "type": "boolean",
+          "description": "The near-miss sibling is a directory rather than a file. Splits the typo lesson by type: almost-typing a folder name means the next step is to walk into it, not to fix the spelling and retry the same command."
         }
       }
     },
