@@ -90,7 +90,7 @@ test("{{near}} needs the decorator that guarantees it AND a raised min_strike", 
     placeholderProblems({ body, min_strike: 5, requires: { cwd_has_files: true } }, slot).length, 1)
 })
 
-import { findRunnableCommand, asksAQuestion, findLiteralFilename, findScenarioName, findJargon, findUngroundedAssumption } from "../helpers/no-do.js"
+import { findRunnableCommand, asksAQuestion, findLiteralFilename, findScenarioName, findJargon, findUngroundedAssumption, findContradictedDecorator } from "../helpers/no-do.js"
 import { knownSlots, slotKeyOf, scenarioNames, forbiddenWords, placeholderProblems } from "../helpers/dictionary.js"
 
 test("no hint body contains a runnable command line (No-Do)", () => {
@@ -243,4 +243,23 @@ test("the No-Do predicate reads a preposition after the verb as prose", () => {
   assert.ok(findRunnableCommand("Try running ls caves to see what is there."))
   assert.ok(findRunnableCommand("Use cd rocks instead."))
   assert.ok(findRunnableCommand("Type cat notes.txt now."))
+})
+
+// The mirror of the ungrounded rule: copy leaning on something requires
+// promises is FALSE. Every cat/Is_A_Directory candidate in one batch asked what
+// was inside a directory it declared empty, and passed every other rule.
+test("no hint contradicts its own requires", () => {
+  for (const { file, data } of hints) {
+    const problem = findContradictedDecorator(data.body, data.requires)
+    assert.equal(problem, null, `${file} ${problem}`)
+  }
+})
+
+test("findContradictedDecorator wants the decorator and the claim together", () => {
+  const empty = { target_is_empty_dir: true }
+  assert.ok(findContradictedDecorator("Which file inside {{target}} did you want?", empty))
+  // Fine without the decorator: the folder may well have something in it.
+  assert.equal(findContradictedDecorator("Which file inside {{target}} did you want?", {}), null)
+  // Fine with the decorator, as long as the copy does not promise contents.
+  assert.equal(findContradictedDecorator("{{target}} is a folder, not a file. What did you want to read?", empty), null)
 })

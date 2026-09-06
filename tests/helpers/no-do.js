@@ -186,3 +186,30 @@ export function findUngroundedAssumption(body, { hasTarget, requires } = {}) {
   }
   return null
 }
+
+// findContradictedDecorator catches copy that asserts the opposite of what its
+// own `requires` says.
+//
+// Every cat/Is_A_Directory candidate in one batch declared
+// `target_is_empty_dir: true` and then asked "which file inside {{target}} did
+// you want to read?" -- of a directory the template itself guarantees is empty.
+// That is worse than an unearned decorator: the hint fires exactly where its
+// question has no answer, and it passed all fifteen other rules.
+//
+// The mirror of findUngroundedAssumption. That one catches copy leaning on
+// something `requires` does not promise; this catches copy leaning on something
+// `requires` promises is false.
+const ASKS_FOR_CONTENTS = /\b(inside|within|in it|in there|contains?)\b/i
+
+export function findContradictedDecorator(body, requires) {
+  const req = requires || {}
+  const text = String(body || "")
+  if (req.target_is_empty_dir === true && ASKS_FOR_CONTENTS.test(text)) {
+    return `asks what is inside {{target}} while requiring "target_is_empty_dir": true, ` +
+      `so it fires only where there is nothing inside`
+  }
+  if (req.cwd_has_children === false && ASKS_FOR_CONTENTS.test(text)) {
+    return `asks about what is here while requiring "cwd_has_children": false`
+  }
+  return null
+}

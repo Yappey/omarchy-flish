@@ -15,7 +15,7 @@
 import { readFileSync } from "node:fs"
 import Ajv from "ajv/dist/2020.js"
 import { hintSchema, knownSlots, slotKey, slotKeyOf, scenarioNames, forbiddenWords, placeholderProblems } from "./helpers/dictionary.js"
-import { findRunnableCommand, asksAQuestion, findLiteralFilename, findScenarioName, findJargon, findUngroundedAssumption } from "./helpers/no-do.js"
+import { findRunnableCommand, asksAQuestion, findLiteralFilename, findScenarioName, findJargon, findUngroundedAssumption, findContradictedDecorator } from "./helpers/no-do.js"
 import { firingReport } from "./helpers/matcher.js"
 import { scenarios } from "./helpers/dictionary.js"
 
@@ -71,6 +71,9 @@ if (slot) {
   })
   if (ungrounded) problems.push(`body ${ungrounded}`)
 }
+
+const contradicted = findContradictedDecorator(candidate.body, candidate.requires)
+if (contradicted) problems.push(`body ${contradicted}`)
 
 if (!asksAQuestion(candidate.body || "")) {
   problems.push("body states rather than asks: no question mark")

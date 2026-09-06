@@ -300,26 +300,52 @@ def build_input(slot, min_strike=3):
     }
     if slot["has_target"]:
         payload["target"] = ctx["target"]
-    else:
-        # The gate's one truth rule, stated as a rule, and placed next to the
-        # decorators it is about rather than at the end of the object. Without a
-        # target the copy can only be pointing at what is lying around, and the
-        # decorator is the only thing that says anything is.
+    rules = grounding_rules(slot)
+    if rules:
+        # The gate's truth rules, stated as rules, and placed next to the
+        # decorators they are about rather than at the end of the object.
         #
         # Position turned out to matter as much as presence. Stated last, with
-        # three worlds in the payload instead of two, it was ignored on 15 of 16
-        # candidates across the two Bad_Usage slots -- the same displacement that
-        # made the prompt the wrong channel for a rule in the first place (D17).
-        payload = reorder_after(payload, "applicable_decorators", "grounding_rules", [
-            'Writing "which file" or "what file" requires "cwd_has_files": true'
-            ' in your requires.',
-            'Writing "which folder" or "what folder" requires "cwd_has_dirs":'
-            ' true in your requires.',
-            'These two override "fewer decorators is better". A decorator named'
-            ' here is not an extra one: it is what makes the question true, and'
-            ' the candidate is rejected without it.',
-        ])
+        # three worlds in the payload instead of two, the first pair was ignored
+        # on 15 of 16 candidates across the two Bad_Usage slots -- the same
+        # displacement that made the prompt the wrong channel for a rule (D17).
+        payload = reorder_after(payload, "applicable_decorators",
+                                "grounding_rules", rules)
     return payload
+
+
+def grounding_rules(slot):
+    """The rules the gate enforces about what copy may claim, per slot.
+
+    Every one of these exists because a whole batch came back breaking it. They
+    are stated here rather than in the prompt for the reason D17 records, and
+    they say "rejected" outright because the authoring prompt's own "fewer
+    decorators is better" otherwise wins the conflict.
+    """
+    rules = []
+    applicable = slot["applicable_decorators"]
+    if not slot["has_target"]:
+        # Without a target the copy can only be pointing at what is lying
+        # around, and the decorator is the only thing that says anything is.
+        if "cwd_has_files" in applicable:
+            rules.append('Writing "which file" or "what file" requires'
+                         ' "cwd_has_files": true in your requires.')
+        if "cwd_has_dirs" in applicable:
+            rules.append('Writing "which folder" or "what folder" requires'
+                         ' "cwd_has_dirs": true in your requires.')
+    if "target_is_empty_dir" in applicable:
+        # Eight of eight candidates declared the folder empty and then asked
+        # which file was inside it.
+        rules.append('"target_is_empty_dir": true promises the folder is EMPTY.'
+                     ' With it you may not ask what is inside, or in, or'
+                     ' contained in the thing they typed -- there is nothing'
+                     ' there. Omit the decorator unless the lesson is about the'
+                     ' folder being empty.')
+    if rules:
+        rules.append('These override "fewer decorators is better". A decorator'
+                     ' named here is not an extra one: it is what makes the copy'
+                     ' true, and the candidate is rejected without it.')
+    return rules
 
 
 def reorder_after(payload, anchor, key, value):
