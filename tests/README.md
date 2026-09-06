@@ -124,6 +124,26 @@ rejects are kept next to their reason. Survivors land in
 `tools/curate/candidates/` (gitignored) and reach `templates/hints/` only when a
 person moves one there.
 
+**At 4B and under there is a ceiling, and it is not a formatting problem.**
+Three models, three architectures (phi3, hybrid Mamba2-Transformer, qwen3), both
+paths where the model supports both:
+
+| Model | `--structured` | native, reasoning on |
+|---|---|---|
+| `phi-4-mini-reasoning` 3B | 0/7 | — (offers no "off") |
+| `nemotron-3-nano-4b` 4B | 0/7 | 1/7 |
+| `qwen3-4b` 4B | 1/7 | 0/7 |
+
+**2 passed of 34 candidates that returned JSON**, and 25 of the 32 failures were
+the same one: the body states instead of asking. Reasoning moves it by at most
+one candidate in either direction — better for nemotron, worse for qwen3-4b —
+which is noise at this sample size, not a signal.
+
+The consistency across three unrelated architectures is what makes this a size
+ceiling rather than a quirk of one model or of the prompt. Explaining is what a
+small model does when asked to be helpful, and neither constrained decoding nor
+deliberation reaches it.
+
 **`--structured` is verified, and it separates two things the benchmark had
 been conflating.** Constrained decoding guarantees well-formed, schema-valid
 output; it does nothing for whether the copy is any good. On
