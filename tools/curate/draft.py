@@ -175,6 +175,15 @@ def hint_response_format():
             "json_schema": {"name": "flish_hint", "strict": True, "schema": schema}}
 
 
+def run_mode(args):
+    """How the run was configured, for filenames. Endpoint and grammar are
+    separate axes, so both belong in the name -- collapsing them is what made
+    an earlier comparison unreadable."""
+    if args.endpoint == "native":
+        return f"native-r-{args.reasoning}"
+    return "messages-grammar" if args.structured else "messages"
+
+
 def model_tag(model):
     """A filename-safe short name: 'google/gemma-4-26b-a4b-qat' -> 'gemma-4-26b-a4b-qat'."""
     return re.sub(r"[^A-Za-z0-9._-]", "-", model.split("/")[-1]) or "model"
@@ -287,21 +296,27 @@ def chat(host, model, system_prompt, user_input, reasoning="off", sampling=None,
         return json.loads(resp.read())
 
 
-def chat_structured(host, model, system_prompt, user_input, sampling=None, timeout=300):
-    """Same request through the OpenAI-compatible endpoint, with the decoder
-    constrained to the hint schema.
+def chat_messages(host, model, system_prompt, user_input, sampling=None,
+                  constrain=False, timeout=300):
+    """The OpenAI-compatible endpoint, optionally with the decoder constrained.
 
-    LM Studio exposes /v1/chat/completions alongside its own API and supports
-    response_format json_schema there. Where it works this is the better path:
-    a model cannot answer in prose if the grammar will not let it. It is opt-in
-    because the native endpoint is the one that exposes the reasoning control,
-    and not every backend honours constrained decoding equally."""
+    The two endpoints differ in more than the grammar, and the difference that
+    matters is the prompt format. LM Studio's own API takes system_prompt and
+    input as separate fields; this one takes a messages array and applies the
+    model's chat template. On qwen3.6-35b-a3b that alone decided whether the
+    copy asked a question: 1 of 7 through the native fields, 3 of 3 here with no
+    grammar at all.
+
+    So `constrain` is a separate axis from the endpoint, and worth leaving off
+    unless a model cannot be trusted to emit JSON -- phi-4-mini-reasoning being
+    the case where it was the difference between unusable and usable."""
     payload = {
         "model": model,
         "messages": [{"role": "system", "content": system_prompt},
                      {"role": "user", "content": user_input}],
-        "response_format": hint_response_format(),
     }
+    if constrain:
+        payload["response_format"] = hint_response_format()
     if sampling:
         payload.update(sampling)
     req = urllib.request.Request(f"{host}/v1/chat/completions",
@@ -397,10 +412,13 @@ def draft_slot(slot, args):
     kept = 0
     for i in range(1, args.n + 1):
         try:
-            call = chat_structured if args.structured else chat
             kwargs = {"sampling": args.sampling, "timeout": args.timeout}
-            if not args.structured:
+            if args.endpoint == "native":
+                call = chat
                 kwargs["reasoning"] = args.reasoning
+            else:
+                call = chat_messages
+                kwargs["constrain"] = args.structured
             response = call(args.host, args.model, system, json.dumps(payload), **kwargs)
         except TimeoutError:
             # Slow, not gone. Reasoning on a large dense model can run for many
@@ -440,7 +458,7 @@ def draft_slot(slot, args):
         # making, and without it in the name the second run silently overwrites
         # the first. --structured sends no reasoning setting at all, so
         # labelling those files r-off would be a lie about what was requested.
-        mode = "structured" if args.structured else f"r-{args.reasoning}"
+        mode = run_mode(args)
         stem = f'{key.replace("/", "-").replace("*", "any")}.{model_tag(args.model)}.{mode}'
 
         if candidate is None:
@@ -484,10 +502,16 @@ def main():
                     help="seconds per generation (default 300). Reasoning on a "
                          "large dense model can exceed this; a candidate that "
                          "overruns is skipped, not fatal.")
+    ap.add_argument("--endpoint", choices=["messages", "native"], default="messages",
+                    help="messages (default) uses /v1/chat/completions and the "
+                         "model's chat template; native uses LM Studio's own API, "
+                         "which is the only one exposing the reasoning control. "
+                         "The prompt format alone changes instruction-following "
+                         "markedly -- see tests/README.md.")
     ap.add_argument("--structured", action="store_true",
-                    help="constrain the decoder to the hint schema via the "
-                         "OpenAI-compatible endpoint. Removes the whole class of "
-                         "replies that answer correctly but not in JSON.")
+                    help="also constrain the decoder to the hint schema. Separate "
+                         "from --endpoint: worth it for a model that cannot be "
+                         "trusted to emit JSON, unnecessary for most.")
     ap.add_argument("--raw-sampling", action="store_true",
                     help="send no sampling parameters and use the server's "
                          "defaults, as this tool did before model profiles existed")
@@ -568,7 +592,7 @@ def main():
         summary = "  ".join(f"{k}={config[k]}" for k in interesting if k in config)
         print(f"{model_tag(args.model)}  reasoning={args.reasoning}  {summary}")
         OUT.mkdir(parents=True, exist_ok=True)
-        mode = "structured" if args.structured else f"r-{args.reasoning}"
+        mode = run_mode(args)
         (OUT / f"{model_tag(args.model)}.{mode}.config.json").write_text(
             json.dumps({"model": args.model,
                         "reasoning": None if args.structured else args.reasoning,

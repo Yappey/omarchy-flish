@@ -31,6 +31,12 @@ state.json
 /tools/curate/fixtures/*
 !/tools/curate/fixtures/.gitkeep
 
+# --- Python bytecode ------------------------------------------------------
+# tools/curate is imported by its tests, which compiles it. The .pyc was
+# committed before this line existed.
+__pycache__/
+*.py[cod]
+
 # --- Test tooling ---------------------------------------------------------
 # tests/ is a Node workspace (ajv, for JSON Schema validation). The lockfile is
 # committed so CI and a contributor resolve the same tree.
