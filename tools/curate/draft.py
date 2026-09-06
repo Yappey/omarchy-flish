@@ -265,6 +265,12 @@ def chat(host, model, system_prompt, user_input, reasoning="off", sampling=None,
     #
     # Above 4B the gate stops discriminating -- both gemmas pass everything --
     # and the models fail in ways only a reader catches. See tests/README.md.
+    #
+    # Those timings were taken with flash attention off and a physical batch of
+    # 8192 against llama.cpp's default of 512, which on a unified-memory APU
+    # pins a compute buffer large enough to starve the host into swap. Fixing
+    # both made the same model 9x faster. Record the runtime settings and
+    # compare timings only within one configuration.
     payload = {
         "model": model,
         "system_prompt": system_prompt,

@@ -173,21 +173,39 @@ So the trade is 24x wall time for one extra candidate **and** a quality defect
 the gate cannot see. For bulk drafting that is probably worth it; for iterating
 on a prompt it is not.
 
-**26-31B, structured, under the full gate.** `gemma-4-31b` was interrupted
-partway (the machine ran out of RAM and the model was unloaded), so its row is a
-partial:
+**Every timing taken before 2026-09-06 measured the machine, not the model.**
+All eleven runs recorded `flash_attention=False` with a physical batch size of
+8192 against llama.cpp's default of 512. On a Strix Halo APU that compute buffer
+is GTT-backed and pinned, so the host was starved and the work went to swap.
+With flash attention on and the batch at 512, `gemma-4-31b` went from 16m9s for
+five candidates to **2m34s for seven** -- about 9x.
 
-| Model | Structured | Time | Native |
-|---|---|---|---|
-| `gemma-4-26b-a4b-qat` | **7/7** | 14m20s | 6/7 in 35s |
-| `gemma-4-31b` | 4/4 completed, run cut short | 16m9s | not run |
-| `muse-glimmer` 28B | 4/7 | 22m36s | 2/7 in 8m17s |
+Scores are unaffected: flash attention is exact attention, and the gate measures
+copy rather than throughput. Wall-clock comparisons between models are not, and
+should be redone.
 
-`gemma-4-31b` matched the 26B MoE on both judgement axes over the four it
-finished -- `requires` correctly omitted on all three cat candidates, and
-`target_near_sibling` used where the copy depends on it. On this evidence the
-MoE is the better choice regardless: same quality, less wall time, and far less
-memory for a machine that has to hold the model and a desktop at once.
+**Two earlier conclusions do not survive that.**
+
+*Retracted -- "`--structured` costs 24x wall time."* That came from gemma-26b's
+14m20s structured against 35s native, both under the bad settings. Re-measured
+on `gemma-4-31b` with the settings corrected:
+
+| Path | Score | Time |
+|---|---|---|
+| `--structured` | 6/7 | 2m34s |
+| native | **7/7** | 2m51s |
+
+They cost the same, and native was marginally *slower*. The 24x was swap
+pressure landing on constrained decoding, not a property of it. The advice that
+followed from it -- "worth it for bulk drafting, not for prompt iteration" --
+had no basis.
+
+*Weakened -- "constrained decoding suppresses the structural defect."* On
+`gemma-4-31b` neither path produced a gratuitous `target_is_empty_dir`: 0 of 3
+both ways. The effect was real within gemma-26b (3 of 3 native against 0 of 3
+structured) and absent here, so it is a property of that model rather than of
+the endpoint. Worth re-testing on gemma-26b under corrected settings before
+anyone relies on it.
 
 **At 4B and under there is a ceiling, and it is not a formatting problem.**
 Three models, three architectures (phi3, hybrid Mamba2-Transformer, qwen3), both
