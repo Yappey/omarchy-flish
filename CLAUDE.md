@@ -135,6 +135,20 @@ so far only `phi-4-mini-reasoning`.
 At 4B and under the failure is uniform and unfixable by either lever: the body
 states instead of asking. 2 passes from 34 candidates.
 
+**Draft at `--temperature 0.2`, not the model card's setting.** The cards
+recommend sampling for open-ended chat -- Gemma 4 asks for 1.0 -- and this task
+is eleven hard rules and one JSON shape. At 1.0 the same model on the same slot
+returned 4/8, 0/8, 7/8 and 5/8, so no run taught anything: a prompt change and
+noise were the same size. At 0.2 the same cells returned 8/8 twice. Do not
+compare two runs across different temperatures. See D18.
+
+**Anything the gate enforces must reach the model -- in the payload, not the
+prompt.** `author-slot.md` is full: a four-line bullet describing the `{{near}}`
+placeholder took gemma-4-26b from 7/8 to 0/8, with most replies abandoning the
+output shape. The identical information in `build_input` took it back to 7/8.
+Put a new rule in `slots.json` or `build_input`; the prompt explains the job,
+the payload carries the rules. See D17.
+
 **Anything the gate enforces must reach the model.** Two whole slots came back
 0/8 twice for rules the model was never told — `argv_count` is an integer while
 every other decorator is a boolean, and the word "arguments" is banned while the
@@ -231,8 +245,11 @@ Closest first-party references: `plugins/osd/` (transient summoned card),
   Drafting refuses an unloaded model by default: it loops, and a just-in-time
   load of several large models is not something to trigger unattended on someone
   else's hardware.
-- **Eleven gate rules, five of which exist because a model produced that failure
-  and it had not been anticipated.** What no rule catches, and what review is
+- **Thirteen gate rules.** Five exist because a model produced that failure and
+  it had not been anticipated; one, `findUngroundedAssumption`, exists because a
+  human rejected the same true-looking, world-false copy six times in one review
+  pass (D16). Format faults are no longer among them -- `draft.py` repairs those
+  before the gate runs. What no rule catches, and what review is
   for: whether the explanation is *true* of the world, whether it points at the
   command the child wants, and whether a decorator is declared without being used
   *or* depended on without being declared. Each has already shipped a wrong hint

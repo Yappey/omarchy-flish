@@ -65,28 +65,26 @@ test("hint ids are stable, lowercase, hyphenated", () => {
 // {{target}} renders from outcome.argv[0]. On a slot with no target -- a bad
 // argument count, an unrecognised verb -- that is the empty string, so the hint
 // ships with a hole in the sentence. slots.json knows which slots have one.
-test("{{target}} is only used on slots that have a target", () => {
+test("every placeholder can render to something", () => {
   for (const { file, data } of hints) {
-    if (!String(data.body).includes("{{target}}")) continue
-    const slot = knownSlots.get(slotKeyOf(data))
-    assert.ok(slot, `${file} targets an unknown slot`)
-    assert.ok(slot.has_target,
-      `${file} interpolates {{target}} but ${slotKeyOf(data)} has no target, ` +
-      `so it would render empty`)
+    const problems = placeholderProblems(data, knownSlots.get(slotKeyOf(data)))
+    assert.deepEqual(problems, [], `${file}: ${problems.join("; ")}`)
   }
 })
 
-test("no unknown placeholders", () => {
-  const KNOWN = new Set(["target"])
-  for (const { file, data } of hints) {
-    for (const m of String(data.body).matchAll(/\{\{\s*([a-z_]+)\s*\}\}/g)) {
-      assert.ok(KNOWN.has(m[1]), `${file} uses unknown placeholder {{${m[1]}}}`)
-    }
-  }
+// The same predicate the drafting gate runs, so a rule cannot be tightened for
+// candidates and left loose for what is already committed.
+test("{{near}} is refused without the decorator that guarantees it", () => {
+  const near = { body: "Did you mean {{near}}?", requires: { target_near_sibling: true } }
+  assert.deepEqual(placeholderProblems(near, { has_target: true }), [])
+  assert.equal(placeholderProblems({ body: "Did you mean {{near}}?" }, { has_target: true }).length, 1)
+  assert.equal(
+    placeholderProblems({ body: "Did you mean {{near}}?", requires: { cwd_has_files: true } },
+      { has_target: true }).length, 1)
 })
 
-import { findRunnableCommand, asksAQuestion, findLiteralFilename, findScenarioName, findJargon } from "../helpers/no-do.js"
-import { knownSlots, slotKeyOf, scenarioNames, forbiddenWords } from "../helpers/dictionary.js"
+import { findRunnableCommand, asksAQuestion, findLiteralFilename, findScenarioName, findJargon, findUngroundedAssumption } from "../helpers/no-do.js"
+import { knownSlots, slotKeyOf, scenarioNames, forbiddenWords, placeholderProblems } from "../helpers/dictionary.js"
 
 test("no hint body contains a runnable command line (No-Do)", () => {
   for (const { file, data } of hints) {
@@ -196,4 +194,33 @@ test("the No-Do predicate allows Socratic prose that names commands", () => {
   for (const a of allowed) {
     assert.equal(findRunnableCommand(a), null, `should have been allowed: ${a}`)
   }
+})
+
+// D15, mechanised. A hint fires wherever its slot and requires hold, so copy
+// that asks the child to name a file has to be paired with the decorator that
+// says a file is there.
+test("no hint asks for something requires does not guarantee", () => {
+  for (const { file, data } of hints) {
+    const slot = knownSlots.get(slotKeyOf(data))
+    if (!slot) continue
+    const problem = findUngroundedAssumption(data.body, {
+      hasTarget: slot.has_target, requires: data.requires,
+    })
+    assert.equal(problem, null, `${file} ${problem}`)
+  }
+})
+
+test("findUngroundedAssumption separates a claim from a description", () => {
+  const noTarget = { hasTarget: false, requires: {} }
+  // Describes the command; asserts nothing about the folder.
+  assert.equal(findUngroundedAssumption("cat needs a file name.", noTarget), null)
+  // Asks them to look around and pick one.
+  assert.ok(findUngroundedAssumption("Which file did you want to read?", noTarget))
+  assert.ok(findUngroundedAssumption("Which folder did you mean?", noTarget))
+  // Grounded by the decorator that makes it true.
+  assert.equal(findUngroundedAssumption("Which file did you want to read?",
+    { hasTarget: false, requires: { cwd_has_files: true } }), null)
+  // With a target, {{target}} names the thing and no claim is made.
+  assert.equal(findUngroundedAssumption("Which file did you mean?",
+    { hasTarget: true, requires: {} }), null)
 })

@@ -5,6 +5,8 @@
     "target_exists": "The first argument resolves to a node in the VFS.",
     "target_is_file": "The first argument resolves to a file rather than a directory.",
     "cwd_has_children": "The directory the child is standing in contains anything at all.",
+    "cwd_has_files": "At least one file sits in the directory the child is standing in. Ask \"which file did you mean?\" only where this is true.",
+    "cwd_has_dirs": "At least one folder sits in the directory the child is standing in. Ask \"which folder did you mean?\" only where this is true.",
     "target_near_sibling": "A sibling of the cwd has a name within edit distance 2 of what was typed -- the typo case.",
     "target_in_parent": "The name that was not found here does exist one level up -- the wrong-room case.",
     "cwd_is_root": "The child is at the top of the tree, so there is no further up to go.",
@@ -22,6 +24,8 @@
       "applicable_decorators": [
         "argv_count",
         "cwd_has_children",
+        "cwd_has_files",
+        "cwd_has_dirs",
         "cwd_is_root"
       ]
     },
@@ -33,6 +37,8 @@
       "concept": "the name does not exist here",
       "applicable_decorators": [
         "cwd_has_children",
+        "cwd_has_files",
+        "cwd_has_dirs",
         "target_near_sibling",
         "near_sibling_is_dir",
         "target_in_parent",
@@ -47,6 +53,8 @@
       "concept": "file versus directory",
       "applicable_decorators": [
         "cwd_has_children",
+        "cwd_has_files",
+        "cwd_has_dirs",
         "target_in_parent",
         "cwd_is_root"
       ]
@@ -59,6 +67,8 @@
       "concept": "the name does not exist here",
       "applicable_decorators": [
         "cwd_has_children",
+        "cwd_has_files",
+        "cwd_has_dirs",
         "target_near_sibling",
         "near_sibling_is_dir",
         "target_in_parent",
@@ -73,7 +83,9 @@
       "concept": "argument count",
       "applicable_decorators": [
         "argv_count",
-        "cwd_has_children"
+        "cwd_has_children",
+        "cwd_has_files",
+        "cwd_has_dirs"
       ]
     },
     {
@@ -84,6 +96,8 @@
       "concept": "the name does not exist here",
       "applicable_decorators": [
         "cwd_has_children",
+        "cwd_has_files",
+        "cwd_has_dirs",
         "target_near_sibling",
         "near_sibling_is_dir",
         "target_in_parent",
@@ -99,6 +113,7 @@
       "applicable_decorators": [
         "target_is_empty_dir",
         "cwd_has_children",
+        "cwd_has_files",
         "cwd_is_root"
       ]
     },
@@ -109,7 +124,9 @@
       "has_target": false,
       "concept": "the verb itself is not a command",
       "applicable_decorators": [
-        "cwd_has_children"
+        "cwd_has_children",
+        "cwd_has_files",
+        "cwd_has_dirs"
       ],
       "note": "command is empty because this slot matches any unrecognised verb. A template for it leaves match.command unset."
     }

@@ -155,6 +155,22 @@ is_root :: proc(world: ^World, node: ^Node) -> bool {
 // failures that print the same error be two different lessons -- see
 // templates/schema/hint.schema.json.
 
+// has_kind reports whether `dir` holds at least one child of `kind`.
+//
+// cwd_has_children answers "is there anything here at all", which is true in
+// every scenario we ship and therefore discriminates nothing. What the copy
+// actually leans on is narrower: "which file did you mean to read?" is false in
+// a directory holding only folders, and "which folder did you mean to enter?"
+// is false in one holding only files. Those are the two questions a hint on a
+// Bad_Usage slot wants to ask, so they need a decorator that can be true.
+has_kind :: proc(dir: ^Node, kind: Node_Kind) -> bool {
+	if !is_dir(dir) do return false
+	for child in dir.children {
+		if child.kind == kind do return true
+	}
+	return false
+}
+
 // has_near_sibling reports whether `dir` holds a name that is a plausible typo
 // of `name`. This is the difference between "that does not exist" and "you
 // almost had it", which for a 7-12 year old are not the same problem at all.

@@ -281,3 +281,76 @@ over-specified hint merely fires rarely, the under-specified one fires and lies.
 cwd and what is in it, labels the concrete example as one example, and the prompt
 says to check the copy against all of them. Nothing mechanical catches a
 violation yet — it remains the first of the three review questions.
+
+## D16 — The gate spends its strictness on truth; the model is told in JSON
+
+Two changes to the drafting loop, made together because each is what makes the
+other affordable.
+
+**Format faults are repaired, not rejected.** `tools/curate/draft.py` now
+kebab-cases an id, strips backticks, coerces `"0"` to `0`, defaults `min_strike`
+and `ttl_ms`, and drops fields the model echoed out of its own brief. Each has
+exactly one correct repair, so applying it loses nothing and throwing the
+generation away bought nothing.
+
+**What is not repaired is anything semantic.** An unknown decorator stays a
+rejection, because the copy may be leaning on it and silently deleting it turns
+"depends on a condition that does not exist" into a hint that fires everywhere
+and lies. Repair lives in the drafting tool and not in the gate for the same
+reason: a committed template has to be right as written.
+
+**And one rule was added, in the space that freed up.** `findUngroundedAssumption`
+rejects a body that asks "which file did you mean?" on a slot with no target
+unless `requires` contains `cwd_has_files`. This is D15 made mechanical, and the
+first gate rule that asks whether copy is *true* rather than well formed. It was
+the most common reason a human rejected a candidate that passed every other
+rule — six times in the first review pass.
+
+**Cost:** the predicate only catches the interrogative form, so "there is a file
+here" as a statement still gets through. Narrow on purpose: a keyword rule over
+"file" fires on `ls/Not_Found`, where the copy names `{{target}}` and asserts
+nothing about what else is lying around.
+
+## D17 — Rules reach the model through the payload, not the prose
+
+`author-slot.md` is full. Adding a four-line bullet describing the `{{near}}`
+placeholder took gemma-4-26b from 7/8 to 0/8 on the same slot, with 7 of 8
+replies abandoning the output shape entirely and emitting `{"hints": [...]}`.
+Shortening the bullet did not help. Moving the identical information into
+`build_input` as a `placeholders` object took it to 7/8.
+
+**Why:** the system prompt is prose competing with eleven other rules for the
+model's attention, and past some length an addition displaces rather than adds.
+The JSON payload is a different channel and the model reads it structurally.
+`applicable_decorators` and `forbidden_vocabulary` moved there for the same
+reason and are not moving back.
+
+**The rule:** a constraint the gate enforces goes in `slots.json` or
+`build_input`. The prompt explains the job; the payload carries the rules. When
+a prompt edit is unavoidable, measure it — at a temperature where the
+measurement means something (D18).
+
+**Cost:** the prompt no longer reads as a complete specification of the task on
+its own. `build_input` has to be read beside it, and the two can drift. The
+placeholder rule is mirrored in three places — `placeholders_for`,
+`placeholderProblems`, and the schema — held together by tests, not by types.
+
+## D18 — Draft at a low temperature; the model card is tuned for chat
+
+`model-profiles.json` takes sampling from each published card, and Gemma 4's
+card asks for `temperature: 1.0, top_p: 0.95, top_k: 64`. That is a setting for
+open-ended conversation. This task is eleven hard rules and one JSON shape.
+
+At 1.0, the same model on the same slot with the same prompt returned 4/8, 0/8,
+7/8 and 5/8. Nothing was learnable from a run: a prompt change and pure noise
+are the same size. At 0.2 the same cells returned 8/8 and 8/8, and a real defect
+— the `{{near}}` bullet in D17 — became visible as a reproducible 0/8 instead of
+being written off as variance, which is exactly what happened to it first time.
+
+**`--temperature` overrides the card.** The cards stay as the record of what the
+publisher recommends; drafting is not what they recommend it for.
+
+**Cost:** low temperature narrows the candidate pool, and the point of drafting
+several is to have something to choose between. Every `cat/Bad_Usage` candidate
+at 0.2 is a paraphrase of every other. Raise it deliberately when the goal is
+range rather than a measurement — but do not compare two runs across it.

@@ -43,6 +43,8 @@ Decorator :: struct {
 	target_exists:       Maybe(bool),
 	target_is_file:      Maybe(bool),
 	cwd_has_children:    Maybe(bool),
+	cwd_has_files:       Maybe(bool),
+	cwd_has_dirs:        Maybe(bool),
 	target_near_sibling: Maybe(bool),
 	near_sibling_is_dir: Maybe(bool),
 	target_in_parent:    Maybe(bool),
@@ -119,6 +121,8 @@ specificity :: proc(template: Template) -> (score: int) {
 	if _, ok := template.requires.target_exists.?; ok do score += 1
 	if _, ok := template.requires.target_is_file.?; ok do score += 1
 	if _, ok := template.requires.cwd_has_children.?; ok do score += 1
+	if _, ok := template.requires.cwd_has_files.?; ok do score += 1
+	if _, ok := template.requires.cwd_has_dirs.?; ok do score += 1
 	if _, ok := template.requires.target_near_sibling.?; ok do score += 1
 	if _, ok := template.requires.near_sibling_is_dir.?; ok do score += 1
 	if _, ok := template.requires.target_in_parent.?; ok do score += 1
@@ -159,7 +163,7 @@ evaluate :: proc(
 
 		session.mark_shown(state, template.id)
 		session.mark_hinted(state)
-		return render(template, state, outcome), true
+		return render(template, world, state, outcome), true
 	}
 	return
 }
@@ -202,6 +206,12 @@ satisfies :: proc(requires: Decorator, world: ^vfs.World, outcome: commands.Outc
 	if want, ok := requires.cwd_has_children.?; ok {
 		if (len(world.cwd.children) > 0) != want do return false
 	}
+	if want, ok := requires.cwd_has_files.?; ok {
+		if vfs.has_kind(world.cwd, .File) != want do return false
+	}
+	if want, ok := requires.cwd_has_dirs.?; ok {
+		if vfs.has_kind(world.cwd, .Directory) != want do return false
+	}
 	if want, ok := requires.target_near_sibling.?; ok {
 		if vfs.has_near_sibling(world.cwd, name) != want do return false
 	}
@@ -227,6 +237,7 @@ satisfies :: proc(requires: Decorator, world: ^vfs.World, outcome: commands.Outc
 @(private)
 render :: proc(
 	template: Template,
+	world: ^vfs.World,
 	state: ^session.State,
 	outcome: commands.Outcome,
 ) -> (
@@ -234,11 +245,27 @@ render :: proc(
 ) {
 	target := len(outcome.argv) > 0 ? outcome.argv[0] : ""
 
+	// {{near}} is the name the child almost typed. Only a template that
+	// requires target_near_sibling may use it -- the validator enforces that,
+	// because everywhere else there is no such name and it renders as nothing.
+	near: string
+	if sibling := vfs.near_sibling(world.cwd, target); sibling != nil {
+		near = sibling.name
+	}
+
 	hint.id = fmt.aprintf("%s-%s-%d", state.id, template.id, state.turns)
 	hint.session = state.id
 	hint.template = template.id
 	hint.title = strings.clone(template.title)
-	hint.body, _ = strings.replace_all(template.body, "{{target}}", target)
+
+	// replace_all does not allocate when there is nothing to replace, so it can
+	// hand back template.body itself. destroy_hint frees hint.body, so chaining
+	// these without tracking ownership frees the dictionary's own memory the
+	// first time a template has no placeholder in it.
+	staged, staged_owned := strings.replace_all(template.body, "{{target}}", target)
+	rendered, rendered_owned := strings.replace_all(staged, "{{near}}", near)
+	if staged_owned && rendered_owned do delete(staged)
+	hint.body = (staged_owned || rendered_owned) ? rendered : strings.clone(rendered)
 	hint.ttl_ms = template.ttl_ms if template.ttl_ms > 0 else 12000
 	return
 }

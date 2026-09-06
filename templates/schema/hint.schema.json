@@ -60,6 +60,14 @@
         "cwd_has_children": {
           "type": "boolean"
         },
+        "cwd_has_files": {
+          "type": "boolean",
+          "description": "The directory the child is standing in holds at least one file. What makes \"which file did you mean to read?\" a true question -- it is false in a directory of nothing but folders."
+        },
+        "cwd_has_dirs": {
+          "type": "boolean",
+          "description": "The directory the child is standing in holds at least one folder. The mirror of cwd_has_files, and what \"which folder did you mean to enter?\" depends on."
+        },
         "target_near_sibling": {
           "type": "boolean",
           "description": "A sibling name is within edit distance 2 of what was typed. The typo case, and the one most worth separating from a plain miss."
@@ -100,7 +108,7 @@
     "body": {
       "type": "string",
       "maxLength": 240,
-      "description": "Socratic. Must ask, never instruct. Must NOT contain a runnable command line -- the child types the answer, the tutor does not supply it. Supports {{target}}."
+      "description": "Socratic. Must ask, never instruct. Must NOT contain a runnable command line -- the child types the answer, the tutor does not supply it. Supports {{target}}, the name the child typed, and {{near}}, the name they almost typed -- {{near}} only on a template that requires target_near_sibling, since nothing else guarantees such a name exists."
     },
     "ttl_ms": {
       "type": "integer",

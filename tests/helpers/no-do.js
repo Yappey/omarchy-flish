@@ -146,3 +146,36 @@ export function findJargon(body, words) {
   }
   return null
 }
+
+// findUngroundedAssumption catches copy that asks the child to pick something
+// the template never says is there.
+//
+// On a slot with no target -- a bad argument count, an unrecognised verb --
+// "which file did you mean?" is a claim: that a file is sitting in the folder
+// they are standing in, ready to be named. The status guarantees nothing of the
+// sort; it only says the verb was used wrongly. At the root of the Lighthouse,
+// which holds two folders and no files, the question has no answer.
+//
+// This is D15 made mechanical, and it is the first gate rule that checks
+// whether copy is *true* rather than whether it is well formed. It was the most
+// common reason a human rejected a candidate that passed every other rule.
+//
+// Only the interrogative form is caught. "cat needs a file name" describes the
+// command and is fine; "which file did you want?" asks them to look around.
+const ASKS_WHICH_FILE = /\b(which|what)\s+(file|filename|file\s+name)\b/i
+const ASKS_WHICH_DIR = /\b(which|what)\s+(folder|directory)\b/i
+
+export function findUngroundedAssumption(body, { hasTarget, requires } = {}) {
+  // With a target, {{target}} names the thing and the copy asserts nothing
+  // about what else is lying around.
+  if (hasTarget) return null
+  const text = String(body || "")
+  const req = requires || {}
+  if (ASKS_WHICH_FILE.test(text) && req.cwd_has_files !== true) {
+    return `asks which file, but no "cwd_has_files": true in requires says one is here`
+  }
+  if (ASKS_WHICH_DIR.test(text) && req.cwd_has_dirs !== true) {
+    return `asks which folder, but no "cwd_has_dirs": true in requires says one is here`
+  }
+  return null
+}

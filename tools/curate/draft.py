@@ -289,11 +289,46 @@ def build_input(slot):
         "applicable_decorators": {
             name: decorators.get(name, "") for name in slot["applicable_decorators"]
         },
+        # Same channel as applicable_decorators, and for the same reason. Said
+        # in the system prompt instead, a second placeholder destabilises the
+        # output shape outright: gemma-4-26b went from drafting single templates
+        # to emitting {"hints": [...]} on 7 of 8 replies. The prose section is
+        # full. Structured input is where this model still reads carefully.
+        "placeholders": placeholders_for(slot),
         "strike_count": 3,
     }
     if slot["has_target"]:
         payload["target"] = ctx["target"]
+    else:
+        # The gate's one truth rule, stated as a rule. Without a target the copy
+        # can only be pointing at what is lying around, and the decorator is the
+        # only thing that says anything is. Descriptions alone did not carry it:
+        # every candidate asked "which file did you mean?" on a slot whose
+        # requires said nothing about files.
+        payload["grounding_rules"] = [
+            'Writing "which file" or "what file" requires "cwd_has_files": true'
+            ' in your requires.',
+            'Writing "which folder" or "what folder" requires "cwd_has_dirs":'
+            ' true in your requires.',
+        ]
     return payload
+
+
+def placeholders_for(slot):
+    """What the body may interpolate, and what each one costs to use.
+
+    Mirrors placeholderProblems in tests/helpers/dictionary.js. A placeholder is
+    legal only where the engine can guarantee a value, so {{near}} carries the
+    decorator that guarantees it rather than being offered unconditionally.
+    """
+    legal = {}
+    if slot["has_target"]:
+        legal["{{target}}"] = "The name the child typed. Always available here."
+    if "target_near_sibling" in slot["applicable_decorators"]:
+        legal["{{near}}"] = ("The closest name that really is in the folder. "
+                             "Allowed only if your requires contains "
+                             "\"target_near_sibling\": true.")
+    return legal
 
 
 def chat(host, model, system_prompt, user_input, reasoning="off", sampling=None, timeout=300):
@@ -452,6 +487,72 @@ def looks_degenerate(candidate):
     return "match" not in candidate and "body" not in candidate
 
 
+REPAIRABLE = ("schema_version", "id", "match", "requires", "min_strike",
+              "title", "body", "ttl_ms")
+
+# Field names that belong to the *input* the model was handed, not to a
+# template. Finding one inside `match` means the model copied part of its brief
+# into its answer -- an echo with no meaning to strip away, unlike an invented
+# decorator, which may be exactly what the copy is leaning on.
+INPUT_ECHO = ("concept", "has_target", "example_world", "all_worlds",
+              "forbidden_words", "applicable_decorators", "strike_count")
+
+
+def repair(candidate):
+    """Fix what is only formatting, and report what was fixed.
+
+    A generation costs a model call; throwing one away because the id had an
+    underscore in it buys nothing. These are faults with exactly one correct
+    repair, so applying it here loses no information and the gate still runs
+    afterwards on the repaired object.
+
+    What is deliberately NOT repaired is anything semantic. A decorator the
+    schema does not know cannot be dropped, because the copy may be leaning on
+    it -- silently deleting it turns "this hint depends on a condition that does
+    not exist" into a hint that fires everywhere and lies. Same for a narrowed
+    `match`. Those stay rejections, which is the whole point of keeping repair
+    in the drafting tool and out of the gate: a committed template has to be
+    right as written.
+    """
+    fixed = []
+
+    for key in [k for k in candidate if k not in REPAIRABLE]:
+        candidate.pop(key)
+        fixed.append(f"dropped unknown field {key!r}")
+
+    match = candidate.get("match")
+    if isinstance(match, dict):
+        for key in [k for k in match if k in INPUT_ECHO]:
+            match.pop(key)
+            fixed.append(f"dropped echoed input field match.{key!r}")
+
+    raw_id = str(candidate.get("id", ""))
+    kebab = re.sub(r"-+", "-", re.sub(r"[^a-z0-9]+", "-", raw_id.lower())).strip("-")
+    if kebab and kebab != raw_id:
+        candidate["id"] = kebab
+        fixed.append(f"id {raw_id!r} -> {kebab!r}")
+
+    for field in ("title", "body"):
+        text = candidate.get(field)
+        if isinstance(text, str) and "`" in text:
+            candidate[field] = text.replace("`", "")
+            fixed.append(f"stripped backticks from {field}")
+
+    # A count the model wrote as "0" means the integer, not a different answer.
+    count = candidate.get("requires", {}).get("argv_count") if isinstance(
+        candidate.get("requires"), dict) else None
+    if isinstance(count, str) and count.strip().isdigit():
+        candidate["requires"]["argv_count"] = int(count)
+        fixed.append(f"argv_count {count!r} -> {int(count)}")
+
+    for field, default in (("min_strike", 3), ("ttl_ms", 14000)):
+        if field not in candidate:
+            candidate[field] = default
+            fixed.append(f"{field} defaulted to {default}")
+
+    return candidate, fixed
+
+
 def gate(candidate_path):
     proc = subprocess.run(["node", str(VALIDATOR), str(candidate_path)],
                           capture_output=True, text=True)
@@ -535,6 +636,9 @@ def draft_slot(slot, args):
 
         candidate.setdefault("schema_version", 1)
         candidate.setdefault("id", f"{stem.lower()}-{i}")
+        candidate, fixed = repair(candidate)
+        if fixed:
+            print(f"  [{i}] repaired: {'; '.join(fixed)}")
         path = OUT / f"{stem}.{i}.json"
         path.write_text(json.dumps(candidate, indent=2) + "\n")
 
@@ -582,6 +686,12 @@ def main():
                     help="also constrain the decoder to the hint schema. Separate "
                          "from --endpoint: worth it for a model that cannot be "
                          "trusted to emit JSON, unnecessary for most.")
+    ap.add_argument("--temperature", type=float, default=None,
+                    help="override the model card's temperature. The cards "
+                         "recommend settings for open-ended chat -- Gemma 4 "
+                         "asks for 1.0 -- and this task is not that: eleven "
+                         "hard rules and one JSON shape. Lower is how you find "
+                         "out whether a result is the prompt or the sampler.")
     ap.add_argument("--raw-sampling", action="store_true",
                     help="send no sampling parameters and use the server's "
                          "defaults, as this tool did before model profiles existed")
@@ -648,6 +758,10 @@ def main():
     # from now is not guesswork about how LM Studio was configured at the time.
     profile = profile_for(args.model)
     args.sampling = None if args.raw_sampling else dict(profile["sampling"])
+    if args.temperature is not None:
+        if args.sampling is None:
+            args.sampling = {}
+        args.sampling["temperature"] = args.temperature
     if profile["suitability"] == "out-of-scope":
         print(f"warning: {profile['name']} is out of scope for this task.")
         print(f"         {profile['notes']}")

@@ -86,3 +86,30 @@ export function coverage() {
     orphans: [...covered.keys()].filter((k) => !knownSlots.has(k))
   }
 }
+
+// ------------------------------------------------------------- placeholders
+//
+// What hints.render substitutes, and the condition each one needs to render as
+// anything at all. {{target}} is the name the child typed, so it needs a slot
+// that has one. {{near}} is the name they almost typed, so it needs a template
+// that requires target_near_sibling -- nothing else guarantees such a name
+// exists, and a hint that renders a hole is worse than one that never fires.
+export const PLACEHOLDERS = new Set(["target", "near"])
+
+export function placeholderProblems(template, slot) {
+  const problems = []
+  const body = String(template.body || "")
+  for (const m of body.matchAll(/\{\{\s*([a-z_]+)\s*\}\}/g)) {
+    if (!PLACEHOLDERS.has(m[1])) problems.push(`unknown placeholder {{${m[1]}}}`)
+  }
+  if (body.includes("{{target}}") && slot && !slot.has_target) {
+    problems.push(
+      `{{target}} would render empty on ${slotKey(slot.command, slot.status)}`)
+  }
+  if (body.includes("{{near}}") && template.requires?.target_near_sibling !== true) {
+    problems.push(
+      `{{near}} needs "target_near_sibling": true in requires; without it the ` +
+      `engine has no near name and the sentence renders with a hole in it`)
+  }
+  return problems
+}
