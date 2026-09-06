@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "id": "lighthouse",
+  "name": "The Lighthouse",
+  "description": "Starts the child at the top of the tree so cwd_is_root is reachable, and pairs a near-miss filename with a same-named file one level up so target_near_sibling and target_in_parent can both fire.",
+  "cwd": "/",
+  "entries": [
+    {
+      "name": "lighthouse",
+      "kind": "dir",
+      "entries": [
+        {
+          "name": "logbook.txt",
+          "kind": "file",
+          "content": "Night 41. The lamp turned all night. No ships.\n"
+        },
+        {
+          "name": "lamp_room",
+          "kind": "dir",
+          "entries": [
+            {
+              "name": "logbook.txt",
+              "kind": "file",
+              "content": "Spare log. The big lens needs cleaning.\n"
+            },
+            { "name": "spare_parts", "kind": "dir", "entries": [] }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "rocks",
+      "kind": "dir",
+      "entries": []
+    }
+  ]
+}
