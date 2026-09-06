@@ -16,6 +16,8 @@ import { readFileSync } from "node:fs"
 import Ajv from "ajv/dist/2020.js"
 import { hintSchema, knownSlots, slotKey, slotKeyOf, scenarioNames, forbiddenWords, placeholderProblems } from "./helpers/dictionary.js"
 import { findRunnableCommand, asksAQuestion, findLiteralFilename, findScenarioName, findJargon, findUngroundedAssumption } from "./helpers/no-do.js"
+import { firingReport } from "./helpers/matcher.js"
+import { scenarios } from "./helpers/dictionary.js"
 
 const arg = process.argv[2]
 if (!arg) {
@@ -93,6 +95,21 @@ if (jargon) {
   problems.push(
     `body uses "${jargon}", which is engineering vocabulary from the matcher, ` +
     `not language a 7-12 year old reads`)
+}
+
+// A template whose requires never hold in any world is not a hint, it is a
+// file. This became checkable only once something could evaluate requires
+// against a scenario, and it is the rule that catches a decorator added to fix
+// review copy that no shipped world can actually satisfy.
+if (slot && !problems.some((p) => p.startsWith("schema:"))) {
+  const report = firingReport(candidate, scenarios)
+  if (!report.some((r) => r.fires)) {
+    problems.push(
+      "fires in no scenario -- " +
+      report.map((r) => `${r.scenario}: ${r.unreachable || "requires never hold"}`)
+        .join("; ") +
+      " (node tests/where-does-it-fire.js <file> for the detail)")
+  }
 }
 
 const runnable = findRunnableCommand(candidate.body || "")

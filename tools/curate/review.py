@@ -37,6 +37,7 @@ HINTS = REPO / "templates" / "hints"
 SLOTS = REPO / "templates" / "schema" / "slots.json"
 SCENARIOS = REPO / "templates" / "scenarios"
 VALIDATOR = REPO / "tests" / "validate-candidate.js"
+WHERE = REPO / "tests" / "where-does-it-fire.js"
 
 
 def load(path):
@@ -85,20 +86,47 @@ def slot_for(candidate):
     return None
 
 
-def scenario_summary():
-    files = sorted(SCENARIOS.glob("*.json"))
-    if not files:
-        return "(no scenarios)"
-    s = load(files[0])
-    lines = []
+def firing_report(path):
+    """Where this template actually fires, from the reference matcher.
 
-    def walk(entries, depth=1):
-        for e in entries:
-            lines.append("  " * depth + e["name"] + ("/" if e["kind"] == "dir" else ""))
-            if e["kind"] == "dir":
-                walk(e.get("entries", []), depth + 1)
-    walk(s["entries"])
-    return f"{s['name']} (cwd {s['cwd']})\n" + "\n".join(lines)
+    This used to print the tree of whichever scenario the glob happened to
+    return first, which told a reviewer nothing about whether the decorators
+    held there -- and "is the copy true of the world it fires in?" was the
+    reason 26 of 26 candidates were rejected in the first pass. Now it is the
+    same evaluation the engine will do, with the copy rendered as a child would
+    read it.
+    """
+    r = subprocess.run(["node", str(WHERE), str(path), "--json"],
+                       capture_output=True, text=True)
+    try:
+        return json.loads(r.stdout)
+    except json.JSONDecodeError:
+        return None
+
+
+def print_firing(path):
+    report = firing_report(path)
+    if report is None:
+        print("  (could not evaluate -- is the candidate valid JSON?)")
+        return
+    for entry in report:
+        if not entry["fires"]:
+            why = entry.get("unreachable") or "requires never hold"
+            print(f"  {entry['scenario']}: never fires -- {why}")
+            continue
+        places = entry["places"]
+        start = entry["start"]
+        # The starting directory first: it is where a child meets this hint
+        # soonest, and where wrong copy does the most damage.
+        places = sorted(places, key=lambda p: p["cwd"] != start)
+        print(f"  {entry['scenario']}: {len(places)} place(s)")
+        for place in places[:2]:
+            at = f"{place['cwd']} (start)" if place["cwd"] == start else place["cwd"]
+            print(f"    standing in {at}, typing {json.dumps(place['argv'])}")
+            print(f"      {place['title']}")
+            print(f"      {place['body']}")
+        if len(places) > 2:
+            print(f"    ... and {len(places) - 2} more")
 
 
 def show(path):
@@ -126,13 +154,12 @@ def show(path):
         print(f"decorators that discriminate here: {', '.join(slot['applicable_decorators']) or '(none)'}")
 
     print()
-    print("world it fires in:")
-    for line in scenario_summary().splitlines():
-        print(f"  {line}")
+    print("where it fires, and what the child reads there:")
+    print_firing(path)
 
     print()
     print("judgement -- none of this is checked by the gate:")
-    print("  1. Is the explanation TRUE of that world?")
+    print("  1. Is the copy above TRUE at every place it fires?")
     print("  2. Does it point at the command the child actually wants?")
     print("  3. Does every declared decorator earn its place, and is one missing")
     print("     that the copy depends on (e.g. 'compare with nearby names' needs")
