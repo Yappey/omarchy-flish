@@ -175,7 +175,8 @@ Closest first-party references: `plugins/osd/` (transient summoned card),
 
 ## Current state
 
-- **Engine: scaffolding, never compiled.** Odin is not installed here. Expect
+- **Engine: scaffolding, never compiled.** `docs/engine-handoff.md` is the
+  handoff: contracts, unverified calls, and what is already proven. Odin is not installed here. Expect
   API drift on first build; `engine/README.md` lists the likely breakages.
 - **Engine IPC is a stub.** `core:net` has no AF_UNIX type, so `ipc.connect`
   always returns disconnected and the engine runs permanently degraded. Needs

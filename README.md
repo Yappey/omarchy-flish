@@ -103,7 +103,7 @@ change does not seem to take, `omarchy restart shell` always settles it.
 
 ## Contributing
 
-- Terminal logic, VFS, IPC, telemetry → `engine/`
+- Terminal logic, VFS, IPC, telemetry → `engine/` (start with [`docs/engine-handoff.md`](docs/engine-handoff.md))
 - Hint overlay visuals and interaction → `tutor/`
 - New hint scenarios and templates → `templates/` (no compiler needed)
 - Anything crossing the engine/tutor line → update `docs/ipc-protocol.md` first

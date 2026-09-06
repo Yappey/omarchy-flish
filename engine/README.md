@@ -8,6 +8,10 @@ This directory is the future `omarchy-flish` repository. It imports nothing from
 `../tutor` and nothing from `../templates` except the JSON shape documented in
 `../templates/schema/`.
 
+> **Picking this up?** [`../docs/engine-handoff.md`](../docs/engine-handoff.md)
+> is the quick reference: setup, the contracts the engine has to match, the
+> calls that have never been compiled, and what is already proven.
+
 ## Package graph
 
 Odin has no cyclic imports, so the dependency direction is fixed and worth
