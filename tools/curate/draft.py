@@ -421,12 +421,13 @@ def draft_slot(slot, args):
 
         text = message_text(response)
         candidate = extract_json(text)
-        # The reasoning setting is part of the run's identity, not a detail:
-        # drafting the same slot with it on and off is exactly the comparison
-        # worth making, and without it in the name the second run silently
-        # overwrites the first.
-        stem = (f'{key.replace("/", "-").replace("*", "any")}'
-                f'.{model_tag(args.model)}.r-{args.reasoning}')
+        # How the run was configured is part of its identity, not a detail:
+        # drafting the same slot two ways is exactly the comparison worth
+        # making, and without it in the name the second run silently overwrites
+        # the first. --structured sends no reasoning setting at all, so
+        # labelling those files r-off would be a lie about what was requested.
+        mode = "structured" if args.structured else f"r-{args.reasoning}"
+        stem = f'{key.replace("/", "-").replace("*", "any")}.{model_tag(args.model)}.{mode}'
 
         if candidate is None:
             print(f"  [{i}] no JSON in the reply")
@@ -553,8 +554,12 @@ def main():
         summary = "  ".join(f"{k}={config[k]}" for k in interesting if k in config)
         print(f"{model_tag(args.model)}  reasoning={args.reasoning}  {summary}")
         OUT.mkdir(parents=True, exist_ok=True)
-        (OUT / f"{model_tag(args.model)}.r-{args.reasoning}.config.json").write_text(
-            json.dumps({"model": args.model, "reasoning": args.reasoning,
+        mode = "structured" if args.structured else f"r-{args.reasoning}"
+        (OUT / f"{model_tag(args.model)}.{mode}.config.json").write_text(
+            json.dumps({"model": args.model,
+                        "reasoning": None if args.structured else args.reasoning,
+                        "structured": args.structured,
+                        "sampling": args.sampling,
                         "config": config}, indent=2) + "\n")
 
     total = sum(draft_slot(s, args) for s in todo)

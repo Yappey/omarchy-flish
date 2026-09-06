@@ -124,6 +124,20 @@ rejects are kept next to their reason. Survivors land in
 `tools/curate/candidates/` (gitignored) and reach `templates/hints/` only when a
 person moves one there.
 
+**`--structured` is verified, and it separates two things the benchmark had
+been conflating.** Constrained decoding guarantees well-formed, schema-valid
+output; it does nothing for whether the copy is any good. On
+`phi-4-mini-reasoning` that was the difference between unusable and usable:
+22KB unparseable replies and 300s timeouts became 27 seconds with every reply
+valid JSON. On `nemotron-3-nano-4b` it changed the failure mode and not the
+score — 0/7 structured against 1/7 native with reasoning on, every rejection
+"no question mark" either way. At 4B, explaining instead of asking is a
+capability limit, and no amount of grammar constraint reaches it.
+
+Reading the cards paid for itself on timing too: nemotron's reasoning-on run
+took minutes per candidate before sampling parameters were applied and under
+two minutes for all seven after.
+
 **Prefer `--structured` where it works.** LM Studio exposes an
 OpenAI-compatible endpoint alongside its own API and supports
 `response_format: json_schema` there, so the decoder can be constrained to
