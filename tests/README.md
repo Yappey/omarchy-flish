@@ -147,8 +147,13 @@ filenames into three of seven bodies, which is the failure it is worst at.
 
 | Defect | Example | Under a grammar |
 |---|---|---|
-| **structural** -- whether an optional field appears | gratuitous `target_is_empty_dir` | suppressed |
+| **structural** -- whether an optional field appears | gratuitous `target_is_empty_dir` | 1 of 9, against 4 of 9 native |
 | **content** -- which words fill a string | `secret_map.txt` instead of `{{target}}` | unaffected |
+
+Counting every `cat/Is_A_Directory` candidate that declared `target_is_empty_dir`
+while its body never mentioned emptiness: **1 of 9 under `--structured`, 4 of 9
+on the native paths.** Substantially reduced, not eliminated — an earlier draft
+of this section said "suppressed", which the pooled numbers do not support.
 
 A JSON schema can say "requires is optional" and that changes what the decoder
 does with it. It cannot say "this string must not contain a name from the
