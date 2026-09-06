@@ -134,16 +134,14 @@ export function findScenarioName(body, names) {
 //
 // "directory" is deliberately absent: it is the word the authentic error uses,
 // so the child has already read it and the hint should echo it.
-const JARGON = [
-  "sibling", "siblings", "cwd", "argv", "decorator", "decorators",
-  "parameter", "parameters", "argument", "arguments", "boolean",
-  "placeholder", "schema", "regex", "substring", "target"
-]
-
-export function findJargon(body) {
+export function findJargon(body, words) {
+  // The list lives in templates/schema/slots.json so the drafting tool can hand
+  // it to the model. A rule the model is never told about produces a whole batch
+  // of identical rejections -- which is exactly what happened on the Bad_Usage
+  // slots, where the lesson is about arguments and "argument" is on the list.
   // {{target}} is the correct way to name the thing; the bare word is not.
   const text = String(body).replace(/\{\{\s*[a-z_]+\s*\}\}/g, " ")
-  for (const word of JARGON) {
+  for (const word of words) {
     if (new RegExp(`(^|[^\\w-])${word}([^\\w-]|$)`, "i").test(text)) return word
   }
   return null

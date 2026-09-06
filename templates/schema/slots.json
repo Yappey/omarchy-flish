@@ -109,5 +109,26 @@
       ],
       "note": "command is empty because this slot matches any unrecognised verb. A template for it leaves match.command unset."
     }
-  ]
+  ],
+  "forbidden_vocabulary": {
+    "words": [
+      "sibling",
+      "siblings",
+      "cwd",
+      "argv",
+      "decorator",
+      "decorators",
+      "parameter",
+      "parameters",
+      "argument",
+      "arguments",
+      "boolean",
+      "placeholder",
+      "schema",
+      "regex",
+      "substring",
+      "target"
+    ],
+    "note": "Engineering vocabulary from the matcher, rejected in hint bodies. A seven year old does not read these. 'directory' is deliberately absent: it is the word the authentic error uses, so the child has already seen it and the hint should echo it. Slots whose concept is argument count are the hard case -- say what the child typed or did not type, not that a verb 'expects one argument'."
+  }
 }

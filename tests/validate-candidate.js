@@ -14,7 +14,7 @@
 
 import { readFileSync } from "node:fs"
 import Ajv from "ajv/dist/2020.js"
-import { hintSchema, knownSlots, slotKey, slotKeyOf, scenarioNames } from "./helpers/dictionary.js"
+import { hintSchema, knownSlots, slotKey, slotKeyOf, scenarioNames, forbiddenWords } from "./helpers/dictionary.js"
 import { findRunnableCommand, asksAQuestion, findLiteralFilename, findScenarioName, findJargon } from "./helpers/no-do.js"
 
 const arg = process.argv[2]
@@ -83,7 +83,7 @@ if (fromScenario) {
     `is not tied to one world`)
 }
 
-const jargon = findJargon(candidate.body || "")
+const jargon = findJargon(candidate.body || "", forbiddenWords)
 if (jargon) {
   problems.push(
     `body uses "${jargon}", which is engineering vocabulary from the matcher, ` +

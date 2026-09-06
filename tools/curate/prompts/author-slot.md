@@ -30,14 +30,18 @@ A JSON object describing exactly one failure the engine can produce:
   "cwd": "/home/treasure_island",
   "siblings": ["secret_map.txt", "caves"],
   "decorators": { "target_is_empty_dir": true },
-  "applicable_decorators": ["target_is_empty_dir", "cwd_has_children", "cwd_is_root"],
+  "applicable_decorators": {
+    "target_is_empty_dir": "The first argument resolves to a directory with nothing in it.",
+    "cwd_has_children": "The directory the child is standing in contains anything at all."
+  },
   "strike_count": 3
 }
 ```
 
-`applicable_decorators` are the only conditions this slot can distinguish on.
-A decorator the status already guarantees is not listed, because it discriminates
-nothing.
+`applicable_decorators` maps each condition this slot can distinguish on to what
+it means. A decorator the status already guarantees is not listed, because it
+discriminates nothing. **Read the description for the value type** -- most are
+booleans, but `argv_count` is an integer.
 
 ## Absolute constraints on the copy
 
@@ -58,6 +62,11 @@ These are not style preferences. A candidate that breaks one is rejected by
 - Address the child as "you". Never refer to yourself.
 - Use `{{target}}` rather than the literal name, and **only** when
   `has_target` is true. On a slot without a target it renders as nothing.
+- **Never use a word from `forbidden_words`.** These are the matcher's own
+  vocabulary and a child does not read them. The hard case is a slot about
+  argument count: say what the child typed or left out — "you gave it nothing to
+  open", "which folder did you mean?" — never that a command "expects one
+  argument".
 
 ## What to produce
 

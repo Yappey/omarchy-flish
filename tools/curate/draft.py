@@ -236,6 +236,9 @@ def scenario_context(slot):
 
 
 def build_input(slot):
+    manifest = load(SLOTS)
+    decorators = manifest.get("decorators", {})
+    forbidden = manifest.get("forbidden_vocabulary", {}).get("words", [])
     ctx = scenario_context(slot)
     stderr = slot["stderr"].replace("{target}", ctx["target"])
     payload = {
@@ -246,7 +249,19 @@ def build_input(slot):
         "has_target": slot["has_target"],
         "cwd": ctx["cwd"],
         "siblings": ctx["siblings"],
-        "applicable_decorators": slot["applicable_decorators"],
+        # Name and meaning, not just name. Handed a bare list, a model
+        # generalises from the majority: every other decorator is a boolean, so
+        # argv_count came back as `true` on every Bad_Usage candidate. The
+        # descriptions already exist in slots.json and say "an integer, not a
+        # boolean" -- they simply were not being passed on.
+        # The gate rejects these outright. Telling the model up front turns a
+        # whole batch of identical rejections into copy it can actually write --
+        # every Bad_Usage candidate came back using the word "arguments", which
+        # is precisely the concept that slot teaches.
+        "forbidden_words": forbidden,
+        "applicable_decorators": {
+            name: decorators.get(name, "") for name in slot["applicable_decorators"]
+        },
         "strike_count": 3,
     }
     if slot["has_target"]:

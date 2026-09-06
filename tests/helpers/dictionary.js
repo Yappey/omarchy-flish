@@ -55,6 +55,8 @@ export function decoratorsCompatible(a = {}, b = {}) {
 // Every name any scenario uses, files and directories alike. A template that
 // contains one of these is describing a particular world rather than the
 // failure, and will be wrong in every other world.
+export const forbiddenWords = slots.forbidden_vocabulary.words
+
 export const scenarioNames = (() => {
   const names = new Set()
   const walk = (entries) => {
