@@ -55,6 +55,8 @@ export function decoratorsCompatible(a = {}, b = {}) {
 // Every name any scenario uses, files and directories alike. A template that
 // contains one of these is describing a particular world rather than the
 // failure, and will be wrong in every other world.
+export const forbiddenWords = slots.forbidden_vocabulary.words
+
 export const scenarioNames = (() => {
   const names = new Set()
   const walk = (entries) => {
@@ -83,4 +85,45 @@ export function coverage() {
     uncovered: rows.filter((r) => r.templates.length === 0).map((r) => r.slot),
     orphans: [...covered.keys()].filter((k) => !knownSlots.has(k))
   }
+}
+
+// ------------------------------------------------------------- placeholders
+//
+// What hints.render substitutes, and the condition each one needs to render as
+// anything at all. {{target}} is the name the child typed, so it needs a slot
+// that has one. {{near}} is the name they almost typed, so it needs a template
+// that requires target_near_sibling -- nothing else guarantees such a name
+// exists, and a hint that renders a hole is worse than one that never fires.
+export const PLACEHOLDERS = new Set(["target", "near"])
+export const DEFAULT_MIN_STRIKE = 3
+
+export function placeholderProblems(template, slot) {
+  const problems = []
+  const body = String(template.body || "")
+  for (const m of body.matchAll(/\{\{\s*([a-z_]+)\s*\}\}/g)) {
+    if (!PLACEHOLDERS.has(m[1])) problems.push(`unknown placeholder {{${m[1]}}}`)
+  }
+  if (body.includes("{{target}}") && slot && !slot.has_target) {
+    problems.push(
+      `{{target}} would render empty on ${slotKey(slot.command, slot.status)}`)
+  }
+  if (body.includes("{{near}}")) {
+    if (template.requires?.target_near_sibling !== true) {
+      problems.push(
+        `{{near}} needs "target_near_sibling": true in requires; without it the ` +
+        `engine has no near name and the sentence renders with a hole in it`)
+    }
+    // Naming the correction ends the child's thinking, so it is the second
+    // hint, not the first: they get a turn to spot it themselves at the default
+    // min_strike, and only if that does not land does a blunter template name
+    // it. Two templates with the same requires, separated by min_strike, is the
+    // shape slots.test.js already sanctions for exactly this.
+    if ((template.min_strike ?? DEFAULT_MIN_STRIKE) <= DEFAULT_MIN_STRIKE) {
+      problems.push(
+        `{{near}} hands over the answer, so it belongs to a blunter second ` +
+        `hint: raise min_strike above ${DEFAULT_MIN_STRIKE} and pair it with a ` +
+        `template that asks them to spot it first`)
+    }
+  }
+  return problems
 }

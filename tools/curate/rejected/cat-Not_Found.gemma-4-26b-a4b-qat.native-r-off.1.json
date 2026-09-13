@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "file-not-found-due-to-typo",
+  "match": {
+    "command": "cat",
+    "status": "Not_Found"
+  },
+  "requires": {
+    "target_near_sibling": true
+  },
+  "min_strike": 3,
+  "title": "the name does not exist here",
+  "body": "you tried to access {{target}}, but it is not in this directory. is there a typo in the name you used?",
+  "ttl_ms": 14000
+}

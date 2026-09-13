@@ -74,6 +74,26 @@ class ResolveReasoning(unittest.TestCase):
             draft.resolve_reasoning("http://127.0.0.1:0", "nope/nope", None))
 
 
+class DegenerateReplies(unittest.TestCase):
+    """An endpoint that suits one model can produce nothing usable from another,
+    and that must not read as bad copy."""
+
+    def test_generic_json_is_degenerate(self):
+        self.assertTrue(draft.looks_degenerate({"ok": True}))
+        self.assertTrue(draft.looks_degenerate({}))
+        self.assertTrue(draft.looks_degenerate({"schema_version": 1, "id": "x"}))
+
+    def test_a_real_attempt_is_not(self):
+        self.assertFalse(draft.looks_degenerate(
+            {"match": {"command": "cat"}, "title": "t", "body": "Why?"}))
+        # A body alone is still an attempt -- match can be filled in later.
+        self.assertFalse(draft.looks_degenerate({"body": "Which command lists it?"}))
+
+    def test_non_dict_is_degenerate(self):
+        self.assertTrue(draft.looks_degenerate(None))
+        self.assertTrue(draft.looks_degenerate([1, 2]))
+
+
 class ModelProfiles(unittest.TestCase):
     """Every card recommends different sampling; none match server defaults."""
 
@@ -116,3 +136,81 @@ def profile_name(model):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RepairTest(unittest.TestCase):
+    """Format faults are fixed; semantic ones stay rejections.
+
+    The line matters: a repair that guesses at meaning turns a candidate the
+    gate would have caught into one that passes while claiming something the
+    engine cannot check.
+    """
+
+    def test_kebab_cases_an_id(self):
+        fixed, notes = draft.repair({"id": "Cat_Needs_A File"})
+        self.assertEqual(fixed["id"], "cat-needs-a-file")
+        self.assertTrue(any("id" in n for n in notes))
+
+    def test_leaves_a_conforming_id_alone(self):
+        fixed, notes = draft.repair({"id": "cat-needs-a-file"})
+        self.assertEqual(fixed["id"], "cat-needs-a-file")
+        self.assertEqual([n for n in notes if "id" in n], [])
+
+    def test_strips_backticks_but_not_the_words_in_them(self):
+        fixed, _ = draft.repair({"id": "x", "body": "Which command lists a folder -- `ls`?"})
+        self.assertEqual(fixed["body"], "Which command lists a folder -- ls?")
+
+    def test_backtick_repair_does_not_smuggle_a_runnable_line_past_no_do(self):
+        # Stripping the quoting must not be a way to launder "use `cd rocks`".
+        # repair only removes the marks; the gate still sees the verb and the
+        # argument sitting next to each other.
+        fixed, _ = draft.repair({"id": "x", "body": "Try `cd rocks` instead."})
+        self.assertIn("cd rocks", fixed["body"])
+
+    def test_coerces_a_numeric_string_count(self):
+        fixed, _ = draft.repair({"id": "x", "requires": {"argv_count": "0"}})
+        self.assertEqual(fixed["requires"]["argv_count"], 0)
+
+    def test_keeps_an_unknown_decorator_so_the_gate_can_reject_it(self):
+        fixed, _ = draft.repair({"id": "x", "requires": {"invented_thing": True}})
+        self.assertEqual(fixed["requires"], {"invented_thing": True})
+
+    def test_drops_an_unknown_top_level_field(self):
+        fixed, notes = draft.repair({"id": "x", "explanation": "why I wrote this"})
+        self.assertNotIn("explanation", fixed)
+        self.assertTrue(any("explanation" in n for n in notes))
+
+    def test_defaults_only_what_is_absent(self):
+        fixed, _ = draft.repair({"id": "x", "min_strike": 5})
+        self.assertEqual(fixed["min_strike"], 5)
+        self.assertEqual(fixed["ttl_ms"], 14000)
+
+    def test_drops_input_metadata_echoed_into_match(self):
+        fixed, notes = draft.repair(
+            {"id": "x", "match": {"command": "ls", "status": "Not_Found",
+                                  "concept": "the name does not exist here",
+                                  "has_target": True}})
+        self.assertEqual(fixed["match"], {"command": "ls", "status": "Not_Found"})
+        self.assertEqual(len([n for n in notes if "match." in n]), 2)
+
+    def test_keeps_stderr_in_match_because_the_schema_knows_it(self):
+        fixed, _ = draft.repair({"id": "x", "match": {"command": "ls", "stderr": "no such"}})
+        self.assertEqual(fixed["match"]["stderr"], "no such")
+
+    def test_drops_input_metadata_echoed_into_requires(self):
+        fixed, notes = draft.repair({"id": "x", "requires": {"has_target": False}})
+        self.assertEqual(fixed["requires"], {})
+        self.assertTrue(any("requires.'has_target'" in n for n in notes))
+
+    def test_still_keeps_an_invented_decorator_for_the_gate(self):
+        # The copy may be leaning on it, so this one is not ours to delete.
+        fixed, _ = draft.repair({"id": "x", "requires": {"cwd_smells_nice": True}})
+        self.assertEqual(fixed["requires"], {"cwd_smells_nice": True})
+
+    def test_defaults_min_strike_to_the_tier_being_drafted(self):
+        fixed, _ = draft.repair({"id": "x"}, min_strike=5)
+        self.assertEqual(fixed["min_strike"], 5)
+
+    def test_does_not_overwrite_a_min_strike_the_model_chose(self):
+        fixed, _ = draft.repair({"id": "x", "min_strike": 7}, min_strike=5)
+        self.assertEqual(fixed["min_strike"], 7)

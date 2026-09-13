@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "command-not-found-verb-is-not-command",
+  "match": {
+    "command": "",
+    "status": "Unknown_Command"
+  },
+  "requires": {
+    "cwd_has_children": true
+  },
+  "min_strike": 3,
+  "title": "The verb is not a command",
+  "body": "You are trying to use a word as a command, but that word is not a valid executable. Can you find the actual command needed to interact with the shell?",
+  "ttl_ms": 14000
+}

@@ -30,25 +30,37 @@ A JSON object describing exactly one failure the engine can produce:
   "cwd": "/home/treasure_island",
   "siblings": ["secret_map.txt", "caves"],
   "decorators": { "target_is_empty_dir": true },
-  "applicable_decorators": ["target_is_empty_dir", "cwd_has_children", "cwd_is_root"],
+  "applicable_decorators": {
+    "target_is_empty_dir": "The first argument resolves to a directory with nothing in it.",
+    "cwd_has_children": "The directory the child is standing in contains anything at all."
+  },
   "strike_count": 3
 }
 ```
 
-`applicable_decorators` are the only conditions this slot can distinguish on.
-A decorator the status already guarantees is not listed, because it discriminates
-nothing.
+`applicable_decorators` maps each condition this slot can distinguish on to what
+it means. A decorator the status already guarantees is not listed, because it
+discriminates nothing. **Read the description for the value type** -- most are
+booleans, but `argv_count` is an integer.
 
 ## Absolute constraints on the copy
 
 These are not style preferences. A candidate that breaks one is rejected by
 `tests/validate-candidate.js` before a human sees it.
 
-- **Never write a command the child could copy.** Not in backticks, not as an
-  example, not "try ls". You may name a concept ("a command that lists things")
-  and you may name a command in prose ("cd walks into folders"), but never a
-  runnable line with an argument. If you cannot help without giving the answer,
-  return the empty object described below.
+- **Name the command, never the line.** Writing the bare verb is wanted: "which
+  command lists what is inside a folder -- ls?" or "cd moves you into a folder".
+  What is forbidden is a runnable line, meaning a verb with its argument
+  attached: "try ls lighthouse", "use 'cd rocks'". The child must still type the
+  target themselves; that is the whole of the No-Do rule, and naming the verb
+  does not give it away. No backticks -- the overlay renders plain text and they
+  appear literally.
+- **A hint is about every world, not the one in `example_world`.** It fires
+  wherever the slot and your `requires` hold, so anything the copy assumes must
+  be guaranteed by them. Check `all_worlds`: if a body says "look at the files
+  around you" and any listed world has only folders at its cwd, the copy is
+  false there and the hint is wrong. Either narrow `requires` until it is true,
+  or say something that holds everywhere.
 - **Never say the child is wrong, slow, or confused.** The error already said
   what happened; you are explaining what it means.
 - **Reference the actual error text** they just saw.
@@ -58,6 +70,11 @@ These are not style preferences. A candidate that breaks one is rejected by
 - Address the child as "you". Never refer to yourself.
 - Use `{{target}}` rather than the literal name, and **only** when
   `has_target` is true. On a slot without a target it renders as nothing.
+- **Never use a word from `forbidden_words`.** These are the matcher's own
+  vocabulary and a child does not read them. The hard case is a slot about
+  argument count: say what the child typed or left out — "you gave it nothing to
+  open", "which folder did you mean?" — never that a command "expects one
+  argument".
 
 ## What to produce
 

@@ -175,6 +175,15 @@ def hint_response_format():
             "json_schema": {"name": "flish_hint", "strict": True, "schema": schema}}
 
 
+def run_mode(args):
+    """How the run was configured, for filenames. Endpoint and grammar are
+    separate axes, so both belong in the name -- collapsing them is what made
+    an earlier comparison unreadable."""
+    if args.endpoint == "native":
+        return f"native-r-{args.reasoning}"
+    return "messages-grammar" if args.structured else "messages"
+
+
 def model_tag(model):
     """A filename-safe short name: 'google/gemma-4-26b-a4b-qat' -> 'gemma-4-26b-a4b-qat'."""
     return re.sub(r"[^A-Za-z0-9._-]", "-", model.split("/")[-1]) or "model"
@@ -188,45 +197,70 @@ def walk(entries, prefix=""):
             yield from walk(e.get("entries", []), path)
 
 
-def scenario_context(slot):
-    """A concrete world for the model to write against.
+def all_worlds():
+    """Every scenario, as the child actually meets it.
 
-    Hints are matched against VFS state, so a candidate written with no world in
-    mind tends to describe the error rather than the situation. Pick a directory
-    with children so `siblings` is meaningful, and a target of the kind this
-    slot implies.
+    A template is universally quantified over worlds that satisfy its
+    `requires`; it is not a description of one world. Showing the model a single
+    arbitrary directory taught it the opposite -- it wrote "which file did you
+    mean to read?" against a directory that had files, and that copy is false at
+    the root of the Lighthouse, where there are only folders. Every rejection
+    citing "false in /" traced back to here.
+
+    Worse, the scenario was picked with list(glob)[0], so which world the model
+    saw depended on filesystem order and could change between runs.
     """
-    files = list(SCENARIOS.glob("*.json"))
-    if not files:
-        return {"cwd": "/", "siblings": [], "target": "the_name_you_typed"}
+    worlds = []
+    for f in sorted(SCENARIOS.glob("*.json")):
+        s = load(f)
+        entries = list(walk(s["entries"]))
+        cwd = s["cwd"]
+        here = [e for p, e in entries
+                if p.rsplit("/", 1)[0] == ("" if cwd == "/" else cwd)]
+        worlds.append({
+            "scenario": s["id"],
+            "cwd": cwd,
+            "here": [{"name": e["name"], "kind": e["kind"]} for e in here],
+            "has_files": any(e["kind"] == "file" for e in here),
+            "has_dirs": any(e["kind"] == "dir" for e in here),
+        })
+    return worlds
 
-    scenario = load(files[0])
-    dirs = [(p, e) for p, e in walk(scenario["entries"]) if e["kind"] == "dir"]
-    best = max(dirs, key=lambda pe: len(pe[1].get("entries", [])), default=None)
-    if best is None:
-        return {"cwd": "/", "siblings": [], "target": "the_name_you_typed"}
 
-    cwd, node = best
-    children = node.get("entries", [])
-    siblings = [c["name"] for c in children]
+def scenario_context(slot):
+    """One concrete example, drawn from the scenario the child starts in.
 
+    Kept because copy written against no world at all describes the error
+    instead of the situation -- but labelled as one example among several, not
+    as the world.
+    """
+    worlds = all_worlds()
+    if not worlds:
+        return {"cwd": "/", "here": [], "target": "the_name_you_typed"}
+
+    world = worlds[0]
+    names = [e["name"] for e in world["here"]]
     want_dir = slot["status"] == "Is_A_Directory"
     want_file = slot["status"] == "Not_A_Directory"
+
     target = None
-    for c in children:
-        if want_dir and c["kind"] == "dir":
-            target = c["name"]
-        elif want_file and c["kind"] == "file":
-            target = c["name"]
+    for e in world["here"]:
+        if want_dir and e["kind"] == "dir":
+            target = e["name"]
+        elif want_file and e["kind"] == "file":
+            target = e["name"]
     if target is None:
-        target = siblings[0] if siblings and slot["has_target"] else "the_name_you_typed"
+        target = names[0] if names and slot["has_target"] else "the_name_you_typed"
     if slot["status"] == "Not_Found":
-        target = "tresure_map.txt"   # a near-miss, which is the interesting case
+        target = "lighthosue"   # a near-miss, which is the interesting case
 
-    return {"cwd": cwd, "siblings": siblings, "target": target}
+    return {"cwd": world["cwd"], "here": world["here"], "target": target}
 
 
-def build_input(slot):
+def build_input(slot, min_strike=3):
+    manifest = load(SLOTS)
+    decorators = manifest.get("decorators", {})
+    forbidden = manifest.get("forbidden_vocabulary", {}).get("words", [])
     ctx = scenario_context(slot)
     stderr = slot["stderr"].replace("{target}", ctx["target"])
     payload = {
@@ -235,14 +269,128 @@ def build_input(slot):
         "stderr": stderr,
         "concept": slot["concept"],
         "has_target": slot["has_target"],
-        "cwd": ctx["cwd"],
-        "siblings": ctx["siblings"],
-        "applicable_decorators": slot["applicable_decorators"],
-        "strike_count": 3,
+        "example_world": {
+            "cwd": ctx["cwd"],
+            "here": ctx["here"],
+            "note": "ONE example. The copy must hold in every world below, not "
+                    "just this one.",
+        },
+        "all_worlds": all_worlds(),
+        # Name and meaning, not just name. Handed a bare list, a model
+        # generalises from the majority: every other decorator is a boolean, so
+        # argv_count came back as `true` on every Bad_Usage candidate. The
+        # descriptions already exist in slots.json and say "an integer, not a
+        # boolean" -- they simply were not being passed on.
+        # The gate rejects these outright. Telling the model up front turns a
+        # whole batch of identical rejections into copy it can actually write --
+        # every Bad_Usage candidate came back using the word "arguments", which
+        # is precisely the concept that slot teaches.
+        "forbidden_words": forbidden,
+        "applicable_decorators": {
+            name: decorators.get(name, "") for name in slot["applicable_decorators"]
+        },
+        # Same channel as applicable_decorators, and for the same reason. Said
+        # in the system prompt instead, a second placeholder destabilises the
+        # output shape outright: gemma-4-26b went from drafting single templates
+        # to emitting {"hints": [...]} on 7 of 8 replies. The prose section is
+        # full. Structured input is where this model still reads carefully.
+        "placeholders": placeholders_for(slot, min_strike),
+        "min_strike": min_strike,
+        "strike_count": min_strike,
     }
     if slot["has_target"]:
         payload["target"] = ctx["target"]
+    rules = grounding_rules(slot)
+    if rules:
+        # The gate's truth rules, stated as rules, and placed next to the
+        # decorators they are about rather than at the end of the object.
+        #
+        # Position turned out to matter as much as presence. Stated last, with
+        # three worlds in the payload instead of two, the first pair was ignored
+        # on 15 of 16 candidates across the two Bad_Usage slots -- the same
+        # displacement that made the prompt the wrong channel for a rule (D17).
+        payload = reorder_after(payload, "applicable_decorators",
+                                "grounding_rules", rules)
     return payload
+
+
+def grounding_rules(slot):
+    """The rules the gate enforces about what copy may claim, per slot.
+
+    Every one of these exists because a whole batch came back breaking it. They
+    are stated here rather than in the prompt for the reason D17 records, and
+    they say "rejected" outright because the authoring prompt's own "fewer
+    decorators is better" otherwise wins the conflict.
+    """
+    rules = []
+    applicable = slot["applicable_decorators"]
+    if not slot["has_target"]:
+        # Without a target the copy can only be pointing at what is lying
+        # around, and the decorator is the only thing that says anything is.
+        if "cwd_has_files" in applicable:
+            rules.append('Writing "which file" or "what file" requires'
+                         ' "cwd_has_files": true in your requires.')
+        if "cwd_has_dirs" in applicable:
+            rules.append('Writing "which folder" or "what folder" requires'
+                         ' "cwd_has_dirs": true in your requires.')
+    if "target_is_empty_dir" in applicable:
+        # Eight of eight candidates declared the folder empty and then asked
+        # which file was inside it.
+        rules.append('"target_is_empty_dir": true promises the folder is EMPTY.'
+                     ' With it you may not ask what is inside, or in, or'
+                     ' contained in the thing they typed -- there is nothing'
+                     ' there. Omit the decorator unless the lesson is about the'
+                     ' folder being empty.')
+    if rules:
+        rules.append('These override "fewer decorators is better". A decorator'
+                     ' named here is not an extra one: it is what makes the copy'
+                     ' true, and the candidate is rejected without it.')
+    return rules
+
+
+def reorder_after(payload, anchor, key, value):
+    """Insert `key` immediately after `anchor`, preserving order otherwise."""
+    out = {}
+    for name, existing in payload.items():
+        out[name] = existing
+        if name == anchor:
+            out[key] = value
+    if key not in out:
+        out[key] = value
+    return out
+
+
+def placeholders_for(slot, min_strike=3):
+    """What the body may interpolate at this tier, and what each one costs.
+
+    Mirrors placeholderProblems in tests/helpers/dictionary.js. A placeholder is
+    legal only where the engine can guarantee a value, so {{near}} carries the
+    decorator that guarantees it rather than being offered unconditionally.
+
+    The tier is an input rather than something the model works out. Told that
+    {{near}} needs a raised min_strike, gemma-4-26b wrote {{near}} at min_strike
+    3 on all sixteen candidates across two slots: the authoring prompt's own
+    "min_strike is 3 unless this is a blunter second hint" competes with it and
+    wins. Which tier is being drafted is an authoring decision anyway -- the pair
+    is designed, not discovered -- so the drafter picks it and the payload simply
+    says what is allowed here.
+    """
+    legal = {}
+    if slot["has_target"]:
+        legal["{{target}}"] = "The name the child typed. Always available here."
+    if "target_near_sibling" not in slot["applicable_decorators"]:
+        return legal
+    if min_strike > DEFAULT_MIN_STRIKE:
+        legal["{{near}}"] = ("The closest name that really is in the folder. "
+                             "This is the blunter second hint, so naming the "
+                             "correction outright is what it is for. Requires "
+                             "\"target_near_sibling\": true in your requires.")
+    else:
+        legal["{{never}}"] = ("NOT a placeholder. There is a second placeholder "
+                              "for the near-miss name, and at this min_strike you "
+                              "may not use it: ask the child to spot the close "
+                              "name themselves, never write it for them.")
+    return legal
 
 
 def chat(host, model, system_prompt, user_input, reasoning="off", sampling=None, timeout=300):
@@ -287,21 +435,27 @@ def chat(host, model, system_prompt, user_input, reasoning="off", sampling=None,
         return json.loads(resp.read())
 
 
-def chat_structured(host, model, system_prompt, user_input, sampling=None, timeout=300):
-    """Same request through the OpenAI-compatible endpoint, with the decoder
-    constrained to the hint schema.
+def chat_messages(host, model, system_prompt, user_input, sampling=None,
+                  constrain=False, timeout=300):
+    """The OpenAI-compatible endpoint, optionally with the decoder constrained.
 
-    LM Studio exposes /v1/chat/completions alongside its own API and supports
-    response_format json_schema there. Where it works this is the better path:
-    a model cannot answer in prose if the grammar will not let it. It is opt-in
-    because the native endpoint is the one that exposes the reasoning control,
-    and not every backend honours constrained decoding equally."""
+    The two endpoints differ in more than the grammar, and the difference that
+    matters is the prompt format. LM Studio's own API takes system_prompt and
+    input as separate fields; this one takes a messages array and applies the
+    model's chat template. On qwen3.6-35b-a3b that alone decided whether the
+    copy asked a question: 1 of 7 through the native fields, 3 of 3 here with no
+    grammar at all.
+
+    So `constrain` is a separate axis from the endpoint, and worth leaving off
+    unless a model cannot be trusted to emit JSON -- phi-4-mini-reasoning being
+    the case where it was the difference between unusable and usable."""
     payload = {
         "model": model,
         "messages": [{"role": "system", "content": system_prompt},
                      {"role": "user", "content": user_input}],
-        "response_format": hint_response_format(),
     }
+    if constrain:
+        payload["response_format"] = hint_response_format()
     if sampling:
         payload.update(sampling)
     req = urllib.request.Request(f"{host}/v1/chat/completions",
@@ -381,6 +535,97 @@ def extract_json(text):
     return parsed[-1]
 
 
+def looks_degenerate(candidate):
+    """True when a reply parsed as JSON but is not an attempt at the task.
+
+    qwen3.8-27b answers the authoring prompt with {"ok": true} through the
+    messages endpoint and with real hints through the native one, so an endpoint
+    that suits one model can produce nothing usable from another. Without this
+    check that shows up as a schema rejection and reads like bad copy, which
+    sends you tuning a prompt when the request shape is what is wrong.
+    """
+    if not isinstance(candidate, dict):
+        return True
+    return "match" not in candidate and "body" not in candidate
+
+
+DEFAULT_MIN_STRIKE = 3
+
+REPAIRABLE = ("schema_version", "id", "match", "requires", "min_strike",
+              "title", "body", "ttl_ms")
+
+# Field names that belong to the *input* the model was handed, not to a
+# template. Finding one inside `match` means the model copied part of its brief
+# into its answer -- an echo with no meaning to strip away, unlike an invented
+# decorator, which may be exactly what the copy is leaning on.
+INPUT_ECHO = ("concept", "has_target", "example_world", "all_worlds",
+              "forbidden_words", "applicable_decorators", "strike_count")
+
+
+def repair(candidate, min_strike=DEFAULT_MIN_STRIKE):
+    """Fix what is only formatting, and report what was fixed.
+
+    A generation costs a model call; throwing one away because the id had an
+    underscore in it buys nothing. These are faults with exactly one correct
+    repair, so applying it here loses no information and the gate still runs
+    afterwards on the repaired object.
+
+    What is deliberately NOT repaired is anything semantic. A decorator the
+    schema does not know cannot be dropped, because the copy may be leaning on
+    it -- silently deleting it turns "this hint depends on a condition that does
+    not exist" into a hint that fires everywhere and lies. Same for a narrowed
+    `match`. Those stay rejections, which is the whole point of keeping repair
+    in the drafting tool and out of the gate: a committed template has to be
+    right as written.
+    """
+    fixed = []
+
+    for key in [k for k in candidate if k not in REPAIRABLE]:
+        candidate.pop(key)
+        fixed.append(f"dropped unknown field {key!r}")
+
+    # Same echo, either place it lands. `requires: {"has_target": false}` came
+    # back on all eight candidates for one slot: has_target is a field of the
+    # brief, not a decorator, so the copy cannot be leaning on it and dropping it
+    # launders nothing -- the grounding rule then rejects the body on its own
+    # merits, which is the feedback that was being hidden.
+    for field in ("match", "requires"):
+        section = candidate.get(field)
+        if not isinstance(section, dict):
+            continue
+        for key in [k for k in section if k in INPUT_ECHO]:
+            section.pop(key)
+            fixed.append(f"dropped echoed input field {field}.{key!r}")
+
+    raw_id = str(candidate.get("id", ""))
+    kebab = re.sub(r"-+", "-", re.sub(r"[^a-z0-9]+", "-", raw_id.lower())).strip("-")
+    if kebab and kebab != raw_id:
+        candidate["id"] = kebab
+        fixed.append(f"id {raw_id!r} -> {kebab!r}")
+
+    for field in ("title", "body"):
+        text = candidate.get(field)
+        if isinstance(text, str) and "`" in text:
+            candidate[field] = text.replace("`", "")
+            fixed.append(f"stripped backticks from {field}")
+
+    # A count the model wrote as "0" means the integer, not a different answer.
+    count = candidate.get("requires", {}).get("argv_count") if isinstance(
+        candidate.get("requires"), dict) else None
+    if isinstance(count, str) and count.strip().isdigit():
+        candidate["requires"]["argv_count"] = int(count)
+        fixed.append(f"argv_count {count!r} -> {int(count)}")
+
+    # The tier is what was asked for, not the schema default: filling in 3 on a
+    # blunt-tier draft would silently turn it back into a first hint.
+    for field, default in (("min_strike", min_strike), ("ttl_ms", 14000)):
+        if field not in candidate:
+            candidate[field] = default
+            fixed.append(f"{field} defaulted to {default}")
+
+    return candidate, fixed
+
+
 def gate(candidate_path):
     proc = subprocess.run(["node", str(VALIDATOR), str(candidate_path)],
                           capture_output=True, text=True)
@@ -390,17 +635,21 @@ def gate(candidate_path):
 def draft_slot(slot, args):
     key = slot_key(slot)
     print(f"\n=== {key} ===")
-    payload = build_input(slot)
+    payload = build_input(slot, args.min_strike)
     system = PROMPT.read_text()
     OUT.mkdir(parents=True, exist_ok=True)
 
     kept = 0
+    degenerate = 0
     for i in range(1, args.n + 1):
         try:
-            call = chat_structured if args.structured else chat
             kwargs = {"sampling": args.sampling, "timeout": args.timeout}
-            if not args.structured:
+            if args.endpoint == "native":
+                call = chat
                 kwargs["reasoning"] = args.reasoning
+            else:
+                call = chat_messages
+                kwargs["constrain"] = args.structured
             response = call(args.host, args.model, system, json.dumps(payload), **kwargs)
         except TimeoutError:
             # Slow, not gone. Reasoning on a large dense model can run for many
@@ -440,8 +689,10 @@ def draft_slot(slot, args):
         # making, and without it in the name the second run silently overwrites
         # the first. --structured sends no reasoning setting at all, so
         # labelling those files r-off would be a lie about what was requested.
-        mode = "structured" if args.structured else f"r-{args.reasoning}"
-        stem = f'{key.replace("/", "-").replace("*", "any")}.{model_tag(args.model)}.{mode}'
+        mode = run_mode(args)
+        tier = "" if args.min_strike == DEFAULT_MIN_STRIKE else f".s{args.min_strike}"
+        stem = (f'{key.replace("/", "-").replace("*", "any")}'
+                f'.{model_tag(args.model)}.{mode}{tier}')
 
         if candidate is None:
             print(f"  [{i}] no JSON in the reply")
@@ -451,8 +702,18 @@ def draft_slot(slot, args):
             print(f"  [{i}] model declined (empty object) -- an acceptable answer")
             continue
 
+        if looks_degenerate(candidate):
+            degenerate += 1
+            print(f"  [{i}] reply is JSON but not an attempt at the task: "
+                  f"{json.dumps(candidate)[:70]}")
+            (OUT / f"{stem}.{i}.reject.txt").write_text(text or "(empty)")
+            continue
+
         candidate.setdefault("schema_version", 1)
         candidate.setdefault("id", f"{stem.lower()}-{i}")
+        candidate, fixed = repair(candidate, args.min_strike)
+        if fixed:
+            print(f"  [{i}] repaired: {'; '.join(fixed)}")
         path = OUT / f"{stem}.{i}.json"
         path.write_text(json.dumps(candidate, indent=2) + "\n")
 
@@ -464,6 +725,12 @@ def draft_slot(slot, args):
             path.rename(OUT / f"{stem}.{i}.reject.json")
             (OUT / f"{stem}.{i}.reject.txt").write_text(report + "\n")
             print(f"  [{i}] reject: {report.splitlines()[0] if report else '?'}")
+
+    if degenerate and degenerate >= args.n / 2:
+        other = "native" if args.endpoint == "messages" else "messages"
+        print(f"  ! {degenerate}/{args.n} replies were JSON but not attempts at the task.")
+        print(f"    That usually means the request shape does not suit this model.")
+        print(f"    Try --endpoint {other} before changing the prompt.")
     return kept
 
 
@@ -484,10 +751,28 @@ def main():
                     help="seconds per generation (default 300). Reasoning on a "
                          "large dense model can exceed this; a candidate that "
                          "overruns is skipped, not fatal.")
+    ap.add_argument("--endpoint", choices=["messages", "native"], default="messages",
+                    help="messages (default) uses /v1/chat/completions and the "
+                         "model's chat template; native uses LM Studio's own API, "
+                         "which is the only one exposing the reasoning control. "
+                         "The prompt format alone changes instruction-following "
+                         "markedly -- see tests/README.md.")
     ap.add_argument("--structured", action="store_true",
-                    help="constrain the decoder to the hint schema via the "
-                         "OpenAI-compatible endpoint. Removes the whole class of "
-                         "replies that answer correctly but not in JSON.")
+                    help="also constrain the decoder to the hint schema. Separate "
+                         "from --endpoint: worth it for a model that cannot be "
+                         "trusted to emit JSON, unnecessary for most.")
+    ap.add_argument("--min-strike", type=int, default=3,
+                    help="which tier to draft. 3 is the first hint a child sees. "
+                         "Above 3 is the blunter follow-up for one the first did "
+                         "not reach -- the only tier where {{near}} may name the "
+                         "correction outright. Draft both and review them as a "
+                         "pair; same requires, separated by this.")
+    ap.add_argument("--temperature", type=float, default=None,
+                    help="override the model card's temperature. The cards "
+                         "recommend settings for open-ended chat -- Gemma 4 "
+                         "asks for 1.0 -- and this task is not that: eleven "
+                         "hard rules and one JSON shape. Lower is how you find "
+                         "out whether a result is the prompt or the sampler.")
     ap.add_argument("--raw-sampling", action="store_true",
                     help="send no sampling parameters and use the server's "
                          "defaults, as this tool did before model profiles existed")
@@ -554,6 +839,10 @@ def main():
     # from now is not guesswork about how LM Studio was configured at the time.
     profile = profile_for(args.model)
     args.sampling = None if args.raw_sampling else dict(profile["sampling"])
+    if args.temperature is not None:
+        if args.sampling is None:
+            args.sampling = {}
+        args.sampling["temperature"] = args.temperature
     if profile["suitability"] == "out-of-scope":
         print(f"warning: {profile['name']} is out of scope for this task.")
         print(f"         {profile['notes']}")
@@ -568,7 +857,7 @@ def main():
         summary = "  ".join(f"{k}={config[k]}" for k in interesting if k in config)
         print(f"{model_tag(args.model)}  reasoning={args.reasoning}  {summary}")
         OUT.mkdir(parents=True, exist_ok=True)
-        mode = "structured" if args.structured else f"r-{args.reasoning}"
+        mode = run_mode(args)
         (OUT / f"{model_tag(args.model)}.{mode}.config.json").write_text(
             json.dumps({"model": args.model,
                         "reasoning": None if args.structured else args.reasoning,

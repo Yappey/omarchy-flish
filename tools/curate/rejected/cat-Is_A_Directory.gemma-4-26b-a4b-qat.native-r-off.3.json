@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "directory-cannot-be-read-with-cat",
+  "match": {
+    "command": "cat",
+    "status": "Is_A_Directory"
+  },
+  "requires": {
+    "target_is_empty_dir": true
+  },
+  "min_strike": 3,
+  "title": "You cannot cat a directory",
+  "body": "The {{target}} you tried to read is actually a directory. How can you list the contents of a folder instead of reading it?",
+  "ttl_ms": 14000
+}

@@ -1,0 +1,1 @@
+The idea that a directory isn’t readable text is sound, but with empty `requires` the rule fires on both `lighthouse/` and empty `rocks/`, asks an open “see what’s inside?” question instead of showing `ls`/`cd`, and lists three unused decorators while missing the one it needs: `target_has_children`.

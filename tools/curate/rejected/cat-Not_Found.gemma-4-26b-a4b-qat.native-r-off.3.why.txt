@@ -1,0 +1,1 @@
+The copy is false in `/` because it tells the child to look at “files around you” when only directories exist, then traps them into rerunning `cat` on a misspelled folder instead of `cd`/`ls`, and the decorators fail because generic `target_near_sibling` has no file/dir split while `cwd_has_children`, `cwd_is_root`, and impossible `target_in_parent` are unearned or omitted.

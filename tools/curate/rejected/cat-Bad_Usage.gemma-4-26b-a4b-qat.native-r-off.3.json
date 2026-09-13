@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "cat-missing-filename",
+  "match": {
+    "command": "cat",
+    "status": "Bad_Usage"
+  },
+  "requires": {
+    "argv_count": 0
+  },
+  "min_strike": 3,
+  "title": "You missed a file name",
+  "body": "You told me to open something, but you didn't say what. Which file did you mean to read?",
+  "ttl_ms": 14000
+}

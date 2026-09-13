@@ -1,0 +1,1 @@
+The first half ("You told me to open something, but you didn't say what.") is a reasonable beginner translation of cat's role. However, the follow-up question ("Which file did you mean to read?") falsely implies that there is an accessible file in the current working directory (/). In reality, / only contains folders (lighthouse/ and rocks/). There is no file present to read.

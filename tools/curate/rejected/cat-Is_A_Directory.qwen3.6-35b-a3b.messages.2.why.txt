@@ -1,0 +1,1 @@
+With empty `requires` the rule fires on both `lighthouse/` and empty `rocks/`, falsely implying files inside the target and tempting `cat logbook.txt` from `/` instead of `cd` or a path, while the three listed decorators go unused and the needed gate (`target_has_files` / not empty) is missing.

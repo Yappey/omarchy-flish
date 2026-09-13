@@ -57,9 +57,16 @@ export function findRunnableCommand(body) {
   // One optional word between the instruction and the command, so "try running
   // ls x" reads the same as "type ls x". Gerunds included; "used cd, but..." is
   // still safe because a trailing comma fails the argument match.
+  //
+  // A preposition after the verb makes it prose, not a command line: no shell
+  // runs `cat on notes.txt`, and "you tried to use cat on {{target}}" is the
+  // hint referencing the error the child just saw, which the authoring prompt
+  // asks for. Without this the rule rejected that phrasing on every candidate
+  // for a whole slot.
+  const PROSE_AFTER_VERB = "on|in|into|at|to|from|with|for|about|inside|instead|and|or"
   const instructed = text.match(new RegExp(
     `\\b(?:use|using|type|typing|run|running|enter|entering|try|trying|write|writing|execute|executing)`
-    + `\\s+(?:\\w+\\s+)?["'\`]?(${ALL_VERBS})\\s+\\S`, "i"))
+    + `\\s+(?:\\w+\\s+)?["'\`]?(${ALL_VERBS})\\s+(?!(?:${PROSE_AFTER_VERB})\\b)\\S`, "i"))
   if (instructed) return `"${instructed[1]}" handed over after an instruction to type it`
 
   for (const verb of HARD_VERBS) {
@@ -134,17 +141,75 @@ export function findScenarioName(body, names) {
 //
 // "directory" is deliberately absent: it is the word the authentic error uses,
 // so the child has already read it and the hint should echo it.
-const JARGON = [
-  "sibling", "siblings", "cwd", "argv", "decorator", "decorators",
-  "parameter", "parameters", "argument", "arguments", "boolean",
-  "placeholder", "schema", "regex", "substring", "target"
-]
-
-export function findJargon(body) {
+export function findJargon(body, words) {
+  // The list lives in templates/schema/slots.json so the drafting tool can hand
+  // it to the model. A rule the model is never told about produces a whole batch
+  // of identical rejections -- which is exactly what happened on the Bad_Usage
+  // slots, where the lesson is about arguments and "argument" is on the list.
   // {{target}} is the correct way to name the thing; the bare word is not.
   const text = String(body).replace(/\{\{\s*[a-z_]+\s*\}\}/g, " ")
-  for (const word of JARGON) {
+  for (const word of words) {
     if (new RegExp(`(^|[^\\w-])${word}([^\\w-]|$)`, "i").test(text)) return word
+  }
+  return null
+}
+
+// findUngroundedAssumption catches copy that asks the child to pick something
+// the template never says is there.
+//
+// On a slot with no target -- a bad argument count, an unrecognised verb --
+// "which file did you mean?" is a claim: that a file is sitting in the folder
+// they are standing in, ready to be named. The status guarantees nothing of the
+// sort; it only says the verb was used wrongly. At the root of the Lighthouse,
+// which holds two folders and no files, the question has no answer.
+//
+// This is D15 made mechanical, and it is the first gate rule that checks
+// whether copy is *true* rather than whether it is well formed. It was the most
+// common reason a human rejected a candidate that passed every other rule.
+//
+// Only the interrogative form is caught. "cat needs a file name" describes the
+// command and is fine; "which file did you want?" asks them to look around.
+const ASKS_WHICH_FILE = /\b(which|what)\s+(file|filename|file\s+name)\b/i
+const ASKS_WHICH_DIR = /\b(which|what)\s+(folder|directory)\b/i
+
+export function findUngroundedAssumption(body, { hasTarget, requires } = {}) {
+  // With a target, {{target}} names the thing and the copy asserts nothing
+  // about what else is lying around.
+  if (hasTarget) return null
+  const text = String(body || "")
+  const req = requires || {}
+  if (ASKS_WHICH_FILE.test(text) && req.cwd_has_files !== true) {
+    return `asks which file, but no "cwd_has_files": true in requires says one is here`
+  }
+  if (ASKS_WHICH_DIR.test(text) && req.cwd_has_dirs !== true) {
+    return `asks which folder, but no "cwd_has_dirs": true in requires says one is here`
+  }
+  return null
+}
+
+// findContradictedDecorator catches copy that asserts the opposite of what its
+// own `requires` says.
+//
+// Every cat/Is_A_Directory candidate in one batch declared
+// `target_is_empty_dir: true` and then asked "which file inside {{target}} did
+// you want to read?" -- of a directory the template itself guarantees is empty.
+// That is worse than an unearned decorator: the hint fires exactly where its
+// question has no answer, and it passed all fifteen other rules.
+//
+// The mirror of findUngroundedAssumption. That one catches copy leaning on
+// something `requires` does not promise; this catches copy leaning on something
+// `requires` promises is false.
+const ASKS_FOR_CONTENTS = /\b(inside|within|in it|in there|contains?)\b/i
+
+export function findContradictedDecorator(body, requires) {
+  const req = requires || {}
+  const text = String(body || "")
+  if (req.target_is_empty_dir === true && ASKS_FOR_CONTENTS.test(text)) {
+    return `asks what is inside {{target}} while requiring "target_is_empty_dir": true, ` +
+      `so it fires only where there is nothing inside`
+  }
+  if (req.cwd_has_children === false && ASKS_FOR_CONTENTS.test(text)) {
+    return `asks about what is here while requiring "cwd_has_children": false`
   }
   return null
 }

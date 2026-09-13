@@ -65,28 +65,33 @@ test("hint ids are stable, lowercase, hyphenated", () => {
 // {{target}} renders from outcome.argv[0]. On a slot with no target -- a bad
 // argument count, an unrecognised verb -- that is the empty string, so the hint
 // ships with a hole in the sentence. slots.json knows which slots have one.
-test("{{target}} is only used on slots that have a target", () => {
+test("every placeholder can render to something", () => {
   for (const { file, data } of hints) {
-    if (!String(data.body).includes("{{target}}")) continue
-    const slot = knownSlots.get(slotKeyOf(data))
-    assert.ok(slot, `${file} targets an unknown slot`)
-    assert.ok(slot.has_target,
-      `${file} interpolates {{target}} but ${slotKeyOf(data)} has no target, ` +
-      `so it would render empty`)
+    const problems = placeholderProblems(data, knownSlots.get(slotKeyOf(data)))
+    assert.deepEqual(problems, [], `${file}: ${problems.join("; ")}`)
   }
 })
 
-test("no unknown placeholders", () => {
-  const KNOWN = new Set(["target"])
-  for (const { file, data } of hints) {
-    for (const m of String(data.body).matchAll(/\{\{\s*([a-z_]+)\s*\}\}/g)) {
-      assert.ok(KNOWN.has(m[1]), `${file} uses unknown placeholder {{${m[1]}}}`)
-    }
-  }
+// The same predicate the drafting gate runs, so a rule cannot be tightened for
+// candidates and left loose for what is already committed.
+test("{{near}} needs the decorator that guarantees it AND a raised min_strike", () => {
+  const slot = { has_target: true }
+  const body = "Did you mean {{near}}?"
+  const near = { body, requires: { target_near_sibling: true } }
+
+  // Naming the correction ends the thinking, so it is the second hint, not the
+  // first. Both conditions are required and each is reported on its own.
+  assert.deepEqual(placeholderProblems({ ...near, min_strike: 5 }, slot), [])
+  assert.equal(placeholderProblems(near, slot).length, 1, "default min_strike is too soon")
+  assert.equal(placeholderProblems({ ...near, min_strike: 3 }, slot).length, 1)
+  assert.equal(placeholderProblems({ body, min_strike: 5 }, slot).length, 1, "no decorator")
+  assert.equal(placeholderProblems({ body }, slot).length, 2, "neither")
+  assert.equal(
+    placeholderProblems({ body, min_strike: 5, requires: { cwd_has_files: true } }, slot).length, 1)
 })
 
-import { findRunnableCommand, asksAQuestion, findLiteralFilename, findScenarioName, findJargon } from "../helpers/no-do.js"
-import { knownSlots, slotKeyOf, scenarioNames } from "../helpers/dictionary.js"
+import { findRunnableCommand, asksAQuestion, findLiteralFilename, findScenarioName, findJargon, findUngroundedAssumption, findContradictedDecorator } from "../helpers/no-do.js"
+import { knownSlots, slotKeyOf, scenarioNames, forbiddenWords, placeholderProblems } from "../helpers/dictionary.js"
 
 test("no hint body contains a runnable command line (No-Do)", () => {
   for (const { file, data } of hints) {
@@ -132,16 +137,16 @@ test("the scenario-name check ignores placeholders and partial words", () => {
 
 test("no hint speaks the matcher's vocabulary at the child", () => {
   for (const { file, data } of hints) {
-    const found = findJargon(data.body)
+    const found = findJargon(data.body, forbiddenWords)
     assert.equal(found, null, `${file} uses "${found}":\n  ${data.body}`)
   }
 })
 
 test("the jargon check keeps the words the error itself uses", () => {
-  assert.equal(findJargon("The terminal said Not a directory. What is {{target}}?"), null)
-  assert.equal(findJargon("Is the file in another folder?"), null)
-  assert.equal(findJargon("Try checking siblings or moving up directories."), "siblings")
-  assert.equal(findJargon("If the target you gave is empty, what then?"), "target")
+  assert.equal(findJargon("The terminal said Not a directory. What is {{target}}?", forbiddenWords), null)
+  assert.equal(findJargon("Is the file in another folder?", forbiddenWords), null)
+  assert.equal(findJargon("Try checking siblings or moving up directories.", forbiddenWords), "siblings")
+  assert.equal(findJargon("If the target you gave is empty, what then?", forbiddenWords), "target")
 })
 
 test("the literal-filename check tolerates ordinary punctuation", () => {
@@ -170,6 +175,19 @@ test("the No-Do predicate catches known violations", () => {
   }
 })
 
+test("the No-Do predicate allows a named verb without its argument", () => {
+  // D3 relaxed: naming the verb does not give the answer away, because the
+  // child still has to supply the target. A verb with its argument attached
+  // does, and stays rejected by the cases above.
+  for (const ok of [
+    "That is a folder. Which command lists what is inside one -- ls?",
+    "cd moves you into a folder. Where do you want to go?",
+    "Is ls the tool for looking, or cd for moving?"
+  ]) {
+    assert.equal(findRunnableCommand(ok), null, `should have been allowed: ${ok}`)
+  }
+})
+
 test("the No-Do predicate allows Socratic prose that names commands", () => {
   const allowed = [
     "Which command shows you what is written inside something?",
@@ -183,4 +201,65 @@ test("the No-Do predicate allows Socratic prose that names commands", () => {
   for (const a of allowed) {
     assert.equal(findRunnableCommand(a), null, `should have been allowed: ${a}`)
   }
+})
+
+// D15, mechanised. A hint fires wherever its slot and requires hold, so copy
+// that asks the child to name a file has to be paired with the decorator that
+// says a file is there.
+test("no hint asks for something requires does not guarantee", () => {
+  for (const { file, data } of hints) {
+    const slot = knownSlots.get(slotKeyOf(data))
+    if (!slot) continue
+    const problem = findUngroundedAssumption(data.body, {
+      hasTarget: slot.has_target, requires: data.requires,
+    })
+    assert.equal(problem, null, `${file} ${problem}`)
+  }
+})
+
+test("findUngroundedAssumption separates a claim from a description", () => {
+  const noTarget = { hasTarget: false, requires: {} }
+  // Describes the command; asserts nothing about the folder.
+  assert.equal(findUngroundedAssumption("cat needs a file name.", noTarget), null)
+  // Asks them to look around and pick one.
+  assert.ok(findUngroundedAssumption("Which file did you want to read?", noTarget))
+  assert.ok(findUngroundedAssumption("Which folder did you mean?", noTarget))
+  // Grounded by the decorator that makes it true.
+  assert.equal(findUngroundedAssumption("Which file did you want to read?",
+    { hasTarget: false, requires: { cwd_has_files: true } }), null)
+  // With a target, {{target}} names the thing and no claim is made.
+  assert.equal(findUngroundedAssumption("Which file did you mean?",
+    { hasTarget: true, requires: {} }), null)
+})
+
+// The verb-plus-preposition case. "You tried to use cat on {{target}}" is the
+// hint referencing the error the child just saw -- which the authoring prompt
+// asks for -- and no shell runs `cat on X`. Before this, the rule rejected that
+// phrasing on all eight candidates for cat/Is_A_Directory in one run.
+test("the No-Do predicate reads a preposition after the verb as prose", () => {
+  assert.equal(findRunnableCommand("You tried to use cat on {{target}}, but it is a folder."), null)
+  assert.equal(findRunnableCommand("You used cd to get in here."), null)
+  // Still caught: a real argument after the verb, preposition or not.
+  assert.ok(findRunnableCommand("Try running ls caves to see what is there."))
+  assert.ok(findRunnableCommand("Use cd rocks instead."))
+  assert.ok(findRunnableCommand("Type cat notes.txt now."))
+})
+
+// The mirror of the ungrounded rule: copy leaning on something requires
+// promises is FALSE. Every cat/Is_A_Directory candidate in one batch asked what
+// was inside a directory it declared empty, and passed every other rule.
+test("no hint contradicts its own requires", () => {
+  for (const { file, data } of hints) {
+    const problem = findContradictedDecorator(data.body, data.requires)
+    assert.equal(problem, null, `${file} ${problem}`)
+  }
+})
+
+test("findContradictedDecorator wants the decorator and the claim together", () => {
+  const empty = { target_is_empty_dir: true }
+  assert.ok(findContradictedDecorator("Which file inside {{target}} did you want?", empty))
+  // Fine without the decorator: the folder may well have something in it.
+  assert.equal(findContradictedDecorator("Which file inside {{target}} did you want?", {}), null)
+  // Fine with the decorator, as long as the copy does not promise contents.
+  assert.equal(findContradictedDecorator("{{target}} is a folder, not a file. What did you want to read?", empty), null)
 })

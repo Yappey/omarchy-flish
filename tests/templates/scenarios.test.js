@@ -7,6 +7,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import Ajv from "ajv/dist/2020.js"
 import { scenarios, scenarioSchema, slots } from "../helpers/dictionary.js"
+import { buildWorld, everyCwd, decoratorsFor } from "../helpers/matcher.js"
 
 const walk = (entries, path = "", out = []) => {
   for (const e of entries || []) {
@@ -78,28 +79,49 @@ test("files have content and directories do not", () => {
 
 // Not a failure -- it is a worklist. A decorator no scenario can exercise is a
 // hint that can be authored but never fires, and never tested.
-test("decorator reachability report", (t) => {
-  const all = walk(scenarios.flatMap((s) => s.data.entries))
-  const dirs = all.filter((e) => e.kind === "dir")
+// Which decorators the shipped worlds can actually exercise, in BOTH
+// directions. A decorator that is never false discriminates nothing; one that is
+// never true is a lesson no child can reach, and the hints leaning on it are
+// dead weight the Odin side will never see fire.
+//
+// This used to hand-list five of the eleven and assert that the manifest was
+// non-empty, so it could not fail. It now enumerates slots.decorators, which
+// means adding a decorator without a world to exercise it fails here.
+test("every world decorator is reachable, true and false", (t) => {
+  // argv_count is a property of what was typed, not of the world; no scenario
+  // can make it unreachable and none should be asked to.
+  const NOT_A_WORLD_FACT = new Set(["argv_count"])
+  const names = Object.keys(slots.decorators).filter((n) => !NOT_A_WORLD_FACT.has(n))
+  const seen = Object.fromEntries(names.map((n) => [n, new Set()]))
 
-  const reachable = {
-    cwd_has_children: dirs.some((d) => (d.entries || []).length > 0),
-    target_is_empty_dir: dirs.some((d) => (d.entries || []).length === 0),
-    target_is_file: all.some((e) => e.kind === "file"),
-    cwd_is_root: scenarios.some((s) => s.data.cwd === "/"),
-    target_in_parent: dirs.some((d) => {
-      const childNames = new Set((d.entries || []).map((e) => e.name))
-      return (d.entries || []).some((c) =>
-        c.kind === "dir" && (c.entries || []).every((g) => !childNames.has(g.name)) &&
-        childNames.size > 0)
-    })
+  for (const { data } of scenarios) {
+    const world = buildWorld(data)
+    for (const dir of everyCwd(world)) {
+      const here = { root: world.root, cwd: dir }
+      // What a child could plausibly type from here: nothing, a real name, a
+      // near miss of one, something from upstairs, and pure nonsense.
+      const probes = [[], ["zzz-nowhere"]]
+      for (const child of dir.children) {
+        probes.push([child.name])
+        probes.push([child.name.slice(0, -1) + "q"])
+      }
+      for (const up of dir.parent?.children || []) probes.push([up.name])
+
+      for (const argv of probes) {
+        const actual = decoratorsFor(here, argv)
+        for (const name of names) seen[name].add(actual[name])
+      }
+    }
   }
-  for (const [name, ok] of Object.entries(reachable)) {
-    t.diagnostic(`  ${ok ? "x" : " "} ${name}`)
+
+  const missing = []
+  for (const name of names) {
+    for (const polarity of [true, false]) {
+      if (!seen[name].has(polarity)) missing.push(`${name}=${polarity}`)
+    }
+    t.diagnostic(`  ${seen[name].has(true) ? "x" : " "}${seen[name].has(false) ? "x" : " "} ${name}`)
   }
-  const unreachable = Object.entries(reachable).filter(([, ok]) => !ok).map(([n]) => n)
-  if (unreachable.length) {
-    t.diagnostic(`  no scenario currently exercises: ${unreachable.join(", ")}`)
-  }
-  assert.ok(Object.keys(slots.decorators).length > 0)
+  assert.deepEqual(missing, [],
+    `no scenario exercises: ${missing.join(", ")} -- add a world shaped to, or ` +
+    `drop the decorator`)
 })

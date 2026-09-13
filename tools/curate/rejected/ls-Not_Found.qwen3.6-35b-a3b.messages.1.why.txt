@@ -1,0 +1,1 @@
+The title wrongly calls nearby items “files,” the body asks about a spelling match the rule never checks (`target_near_sibling` is declared but not required), and it never shows bare `ls` or `ls`/`cd` plus a name—so only `cwd_has_children` is earned while `cwd_is_root` and impossible `target_in_parent` are unused.

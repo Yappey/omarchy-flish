@@ -16,8 +16,13 @@ cd tests && npm install && npm test  # templates + tutor logic, ~70ms, no deskto
 node --test --test-name-pattern "No-Do"          # a single test
 scripts/e2e-tutor.py                 # end-to-end, needs a live shell (~25s)
 node tests/validate-candidate.js F   # gate one drafted hint (same rules as the suite)
+node tests/where-does-it-fire.js F   # which scenarios it fires in, with the copy rendered
 tools/curate/draft.py --list         # uncovered slots: the authoring worklist
+tools/curate/draft.py --slot S --min-strike 5   # the blunter second hint of a pair
 tools/curate/draft.py --models       # LM Studio models; drafting needs one LOADED
+tools/curate/review.py --list        # drafted candidates awaiting a human decision
+tools/curate/review.py               # walk the queue: slot, world, judgement questions
+python3 -m unittest discover -s tools/curate -p 'test_*.py'   # reply-parsing tests
 
 engine/scripts/build.sh             # debug build -> engine/build/omarchy-flish
 engine/scripts/build.sh release     # -o:speed -no-bounds-check
@@ -104,6 +109,62 @@ The world is content too: `templates/scenarios/*.json`, loaded at startup and
 doubling as the fixture a hint's decorators are tested against. A hint requiring
 `target_in_parent` is only reachable in a scenario shaped that way.
 
+### Drafting hints with a local model
+
+`tools/curate/draft.py` iterates uncovered slots against LM Studio;
+`tools/curate/review.py` is the human step. Nothing reaches `templates/hints/`
+without a person accepting it (D9). `tests/README.md` has the full benchmark.
+
+**Which model, and which endpoint.** Measured over eight models on two slots:
+
+| Model | Score | Endpoint |
+|---|---|---|
+| `gemma-4-26b-a4b-qat` | 7/7 | either; fastest, MoE, kindest to RAM |
+| `gemma-4-31b` | 7/7 | native |
+| `qwen3.6-35b-a3b` | 5/7 | **messages** (1/7 native) |
+| `qwen3.8-27b` | 3/7 | **native** (messages returns `{"ok": true}`) |
+| 4B and under | 0-1/7 | — |
+
+`--endpoint` matters more than `--structured` and is **per model**: the messages
+path applies the model's chat template, the native path takes `system_prompt`
+and `input` as bare fields. Two models in the same family disagree about which
+is better. When a model is producing nothing usable, change `--endpoint` before
+touching the prompt — `draft.py` detects a reply that parses as JSON but carries
+neither `match` nor `body` and says so. Constrained decoding (`--structured`) is
+a separate axis and only earns its cost for a model that cannot emit JSON at all,
+so far only `phi-4-mini-reasoning`.
+
+At 4B and under the failure is uniform and unfixable by either lever: the body
+states instead of asking. 2 passes from 34 candidates.
+
+**Draft at `--temperature 0.2`, not the model card's setting.** The cards
+recommend sampling for open-ended chat -- Gemma 4 asks for 1.0 -- and this task
+is eleven hard rules and one JSON shape. At 1.0 the same model on the same slot
+returned 4/8, 0/8, 7/8 and 5/8, so no run taught anything: a prompt change and
+noise were the same size. At 0.2 the same cells returned 8/8 twice. Do not
+compare two runs across different temperatures. See D18.
+
+**Anything the gate enforces must reach the model -- in the payload, not the
+prompt.** `author-slot.md` is full: a four-line bullet describing the `{{near}}`
+placeholder took gemma-4-26b from 7/8 to 0/8, with most replies abandoning the
+output shape. The identical information in `build_input` took it back to 7/8.
+Put a new rule in `slots.json` or `build_input`; the prompt explains the job,
+the payload carries the rules. See D17.
+
+**Anything the gate enforces must reach the model.** Two whole slots came back
+0/8 twice for rules the model was never told — `argv_count` is an integer while
+every other decorator is a boolean, and the word "arguments" is banned while the
+`Bad_Usage` lesson *is* argument count. Decorator meanings and
+`forbidden_vocabulary` now live in `slots.json`, read by the tests *and* passed
+in `build_input`. Add a gate rule, add it there.
+
+**Runtime settings are part of the result.** Every timing taken before
+2026-09-06 measured swap, not the model: flash attention off with a physical
+batch of 8192 against llama.cpp's default 512 pins a GTT-backed compute buffer
+that starves the host on a unified-memory APU. Fixing both made the same model
+9x faster. `draft.py` records the loaded instance config with every run; compare
+timings only within one configuration.
+
 ### The IPC seam
 
 NDJSON over `$XDG_RUNTIME_DIR/omarchy-flish/tutor.sock`, falling back to
@@ -181,12 +242,28 @@ Closest first-party references: `plugins/osd/` (transient summoned card),
 - **Engine IPC is a stub.** `core:net` has no AF_UNIX type, so `ipc.connect`
   always returns disconnected and the engine runs permanently degraded. Needs
   `core:sys/linux`. This is why `scripts/fake-engine.py` exists.
-- **Hint dictionary covers 2 of 8 slots.** `tools/curate/draft.py --list` shows
-  the rest. Drafting runs against a local LM Studio model and every candidate
-  passes `tests/validate-candidate.js` before a human reads it; nothing reaches
-  `templates/hints/` without a person moving it (D9). Drafting refuses an
-  unloaded model by default — it loops, and a just-in-time load of several large
-  models is not something to trigger unattended on someone else's hardware.
+- **Hint dictionary covers 2 of 8 slots shipped, with 44 candidates drafted and
+  pending review** across the other six — `tools/curate/review.py --list`.
+  Drafting refuses an unloaded model by default: it loops, and a just-in-time
+  load of several large models is not something to trigger unattended on someone
+  else's hardware.
+- **Fifteen gate rules.** Five exist because a model produced that failure and it
+  had not been anticipated; `findUngroundedAssumption` exists because a human
+  rejected the same true-looking, world-false copy six times in one review pass
+  (D16); and "fires in no scenario" became checkable only once the reference
+  matcher existed. Format faults are no longer among them -- `draft.py` repairs
+  those before the gate runs. What no rule catches, and what review is for:
+  whether it points at the command the child wants, and whether a decorator is
+  declared without being used *or* depended on without being declared. Both have
+  already shipped a wrong hint past every rule. "Is it true of the world?" used
+  to be on that list; `review.py --show` now answers it by rendering the copy at
+  every place the template fires.
+- **Every world decorator is reachable in both polarities**, and the reachability
+  report enumerates `slots.decorators` rather than a hand-kept list, so adding a
+  decorator with no world to exercise it fails the suite.
+  `templates/scenarios/workshop.json` is the only world that starts the child
+  where files and folders sit side by side, which is what makes `cwd_has_files`
+  true on the very first turn.
 - **Regex is unimplemented.** `match.stderr` is specified as a regex but
   compared as a substring; the `{{target}}` extraction wants named captures.
   Decide `core:text/regex` vs a PCRE2 binding (D2).

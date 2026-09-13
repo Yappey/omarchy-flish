@@ -1,0 +1,1 @@
+The copy contradicts itself by admitting `rocks/` is empty then asking how to see its contents—nudging the child to a blank `ls` instead of `cd` or an emptiness explanation—and the decorators fail because `target_is_empty_dir` is used backwards while `cwd_has_children` and `cwd_is_root` are unearned and omitted from `requires`.

@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "id": "target-not-found-check-spelling-or-location",
+  "match": {
+    "command": "ls",
+    "status": "Not_Found"
+  },
+  "min_strike": 3,
+  "title": "Target not found in current folder",
+  "body": "The error says {{target}} is not in this folder. Does the spelling match exactly, or could it be located elsewhere?",
+  "ttl_ms": 14000
+}

@@ -1,0 +1,1 @@
+Using “names” is safer than “files,” but empty `requires` makes this an unfiltered catch-all that can fire when the item lives deeper (e.g. `logbook.txt`), never shows bare `ls` or `ls`/`cd` plus a name, and lists four unused decorators while omitting the one the copy assumes: `cwd_has_children`.

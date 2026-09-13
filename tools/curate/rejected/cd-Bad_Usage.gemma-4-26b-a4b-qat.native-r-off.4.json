@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "cd-needs-a-destination",
+  "match": {
+    "command": "cd",
+    "status": "Bad_Usage"
+  },
+  "requires": {
+    "argv_count": 1
+  },
+  "min_strike": 3,
+  "title": "You forgot a destination",
+  "body": "You told the system to move, but you didn't say where. Which folder did you mean to enter?",
+  "ttl_ms": 14000
+}

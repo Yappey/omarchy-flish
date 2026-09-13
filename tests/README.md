@@ -184,6 +184,46 @@ Scores are unaffected: flash attention is exact attention, and the gate measures
 copy rather than throughput. Wall-clock comparisons between models are not, and
 should be redone.
 
+**The two request paths differ in more than the grammar, and the grammar is
+not the part that matters.** LM Studio's own API takes `system_prompt` and
+`input` as separate fields; `/v1/chat/completions` takes a messages array and
+applies the model's chat template. Those were never separated until now.
+`qwen3.6-35b-a3b`, same slots, same sampling:
+
+| Path | Score | Time |
+|---|---|---|
+| native fields | 1/7 | 22s |
+| messages + grammar | 5/7 | 7m23s |
+| **messages, no grammar** | **5/7** | 8m30s |
+
+The grammar adds nothing on a capable model. The chat template decides whether
+the copy asks a question at all: the native path failed four of seven on "no
+question mark", the messages path none.
+
+The native path's speed is not free either — it was fast because it was
+producing short, unconsidered completions. Engaging with the task takes longer
+and is what you want.
+
+**But the right endpoint is per model, not global.** `qwen3.8-27b` reverses
+the qwen3.6 result exactly: through the messages endpoint it answers the
+authoring prompt with `{"ok": true}`, and through the native fields it produces
+real hints.
+
+| Model | native fields | messages |
+|---|---|---|
+| `qwen3.6-35b-a3b` | 1/7 | **5/7** |
+| `qwen3.8-27b` | **3/7** in 46s | degenerate `{"ok": true}` |
+
+So there is no globally better request shape, and `messages` is the default only
+because it suits more of the models tried. When a model is producing nothing
+usable, change `--endpoint` before touching the prompt: `draft.py` now detects a
+reply that parses as JSON but contains neither `match` nor `body`, and says so
+rather than letting it land as a schema rejection that reads like bad copy.
+
+`--endpoint` and `--structured` are separate flags now. Messages is the default;
+the grammar is worth turning on only for a model that cannot be trusted to emit
+JSON, which so far means `phi-4-mini-reasoning` and nothing else.
+
 **Two earlier conclusions do not survive that.**
 
 *Retracted -- "`--structured` costs 24x wall time."* That came from gemma-26b's

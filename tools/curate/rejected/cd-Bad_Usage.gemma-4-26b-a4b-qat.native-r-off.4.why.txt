@@ -1,0 +1,1 @@
+The entry is closer to the truth than the cat examples but fails because it asks a valid “which folder?” question without reliably pointing the child at `cd <folder>`, and its decorators are wrong: `argv_count` is set to 1 when bare `cd` has 0 args, `cwd_is_root` and `cwd_has_children` are unearned or imprecise, and a real “has subdirectories” gate is missing.

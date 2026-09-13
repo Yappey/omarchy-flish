@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "ls-not-found-spelling-error",
+  "match": {
+    "command": "ls",
+    "status": "Not_Found"
+  },
+  "requires": {
+    "target_near_sibling": true
+  },
+  "min_strike": 3,
+  "title": "The specified name does not exist",
+  "body": "You tried to access {{target}}, but it cannot be found in your current directory. Could you be looking for a similarly named file instead?",
+  "ttl_ms": 14000
+}

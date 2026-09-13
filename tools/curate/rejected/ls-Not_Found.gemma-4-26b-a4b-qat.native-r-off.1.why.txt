@@ -1,0 +1,1 @@
+The title wrongly treats a nearby misspelling as a “file name” when `/` only has folders, the body only asks if they misspelled it instead of showing `ls`/`cd` plus the name, and the decorator contract still fails: generic `target_near_sibling` with no file/dir split, plus unearned omitted `cwd_has_children`, `cwd_is_root`, and impossible `target_in_parent`.

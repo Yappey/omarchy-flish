@@ -1,0 +1,1 @@
+The copy mislabels a near-sibling directory as a missing “file” and tells the child to fix spelling so `cat` will work—leading them into `Is a directory` instead of `cd`/`ls`—and the decorators fail because `target_near_sibling` isn’t file-qualified, while `cwd_has_children`, `cwd_is_root`, and impossible `target_in_parent` are unearned or omitted.

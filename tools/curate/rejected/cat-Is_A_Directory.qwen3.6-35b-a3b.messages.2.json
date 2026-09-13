@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "id": "cat-directory-vs-file",
+  "match": {
+    "command": "cat",
+    "status": "Is_A_Directory"
+  },
+  "min_strike": 3,
+  "title": "cat expects a file, not {{target}}",
+  "body": "The error says {{target}} is a directory. What file inside this folder did you mean to read?",
+  "ttl_ms": 14000
+}

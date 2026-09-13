@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "check-spelling-on-not-found",
+  "match": {
+    "command": "ls",
+    "status": "Not_Found"
+  },
+  "requires": {
+    "cwd_has_children": true
+  },
+  "min_strike": 3,
+  "title": "The name might not match any file.",
+  "body": "The shell reported it could not access {{target}}. Does the spelling match one of the items you see nearby?",
+  "ttl_ms": 14000
+}

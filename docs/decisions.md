@@ -242,3 +242,184 @@ existence.
 slots, its hints) rather than one. That is the intended friction: `tokenize`
 already warns that every feature added is a concept a child can trip over, and
 a command shipped without hint coverage trips them with no help.
+
+## D14 — "No-Do" relaxed: name the verb, never the line
+
+A hint may now write a bare command verb — "which command lists what is inside a
+folder — `ls`?" — but still never a verb with its argument attached.
+
+**Why:** review of the first drafted batch rejected candidate after candidate for
+being true but useless. "Which command shows you what is written inside
+something?" names a concept a child cannot act on when they do not yet know the
+vocabulary. Naming the verb does not give the answer away, because the target is
+the part they have to work out and type.
+
+**What is unchanged:** `ls lighthouse`, `cd rocks`, `use 'cat notes.txt'` are all
+still rejected, in the body and the title, quoted or introduced by an
+instruction to type them. The child still supplies the argument, which is the
+part that requires understanding where they are.
+
+**Cost:** the line is finer than "no commands" and needs the predicate to hold
+it. Two tests pin both sides — a named verb passes, a verb with an argument does
+not — because this is the rule most likely to drift back under pressure to be
+helpful.
+
+## D15 — A template is about every world, not the one it was drafted against
+
+The drafting input showed the model one directory and it wrote copy true of that
+directory. Against the Lighthouse, whose root holds only folders, "which file did
+you mean to read?" is false — and most of the first batch was rejected for
+exactly that.
+
+**Why it matters beyond drafting:** a template is universally quantified over
+worlds satisfying its `requires`. Anything the copy assumes must be guaranteed by
+the slot or a decorator, or the hint is wrong somewhere it can fire. That is also
+why an under-specified `requires` is worse than an over-specified one: the
+over-specified hint merely fires rarely, the under-specified one fires and lies.
+
+**How it is enforced:** the drafting input now carries every scenario's starting
+cwd and what is in it, labels the concrete example as one example, and the prompt
+says to check the copy against all of them. Nothing mechanical catches a
+violation yet — it remains the first of the three review questions.
+
+## D16 — The gate spends its strictness on truth; the model is told in JSON
+
+Two changes to the drafting loop, made together because each is what makes the
+other affordable.
+
+**Format faults are repaired, not rejected.** `tools/curate/draft.py` now
+kebab-cases an id, strips backticks, coerces `"0"` to `0`, defaults `min_strike`
+and `ttl_ms`, and drops fields the model echoed out of its own brief. Each has
+exactly one correct repair, so applying it loses nothing and throwing the
+generation away bought nothing.
+
+**What is not repaired is anything semantic.** An unknown decorator stays a
+rejection, because the copy may be leaning on it and silently deleting it turns
+"depends on a condition that does not exist" into a hint that fires everywhere
+and lies. Repair lives in the drafting tool and not in the gate for the same
+reason: a committed template has to be right as written.
+
+**And one rule was added, in the space that freed up.** `findUngroundedAssumption`
+rejects a body that asks "which file did you mean?" on a slot with no target
+unless `requires` contains `cwd_has_files`. This is D15 made mechanical, and the
+first gate rule that asks whether copy is *true* rather than well formed. It was
+the most common reason a human rejected a candidate that passed every other
+rule — six times in the first review pass.
+
+**Cost:** the predicate only catches the interrogative form, so "there is a file
+here" as a statement still gets through. Narrow on purpose: a keyword rule over
+"file" fires on `ls/Not_Found`, where the copy names `{{target}}` and asserts
+nothing about what else is lying around.
+
+## D17 — Rules reach the model through the payload, not the prose
+
+`author-slot.md` is full. Adding a four-line bullet describing the `{{near}}`
+placeholder took gemma-4-26b from 7/8 to 0/8 on the same slot, with 7 of 8
+replies abandoning the output shape entirely and emitting `{"hints": [...]}`.
+Shortening the bullet did not help. Moving the identical information into
+`build_input` as a `placeholders` object took it to 7/8.
+
+**Why:** the system prompt is prose competing with eleven other rules for the
+model's attention, and past some length an addition displaces rather than adds.
+The JSON payload is a different channel and the model reads it structurally.
+`applicable_decorators` and `forbidden_vocabulary` moved there for the same
+reason and are not moving back.
+
+**The rule:** a constraint the gate enforces goes in `slots.json` or
+`build_input`. The prompt explains the job; the payload carries the rules. When
+a prompt edit is unavoidable, measure it — at a temperature where the
+measurement means something (D18).
+
+**Cost:** the prompt no longer reads as a complete specification of the task on
+its own. `build_input` has to be read beside it, and the two can drift. The
+placeholder rule is mirrored in three places — `placeholders_for`,
+`placeholderProblems`, and the schema — held together by tests, not by types.
+
+## D18 — Draft at a low temperature; the model card is tuned for chat
+
+`model-profiles.json` takes sampling from each published card, and Gemma 4's
+card asks for `temperature: 1.0, top_p: 0.95, top_k: 64`. That is a setting for
+open-ended conversation. This task is eleven hard rules and one JSON shape.
+
+At 1.0, the same model on the same slot with the same prompt returned 4/8, 0/8,
+7/8 and 5/8. Nothing was learnable from a run: a prompt change and pure noise
+are the same size. At 0.2 the same cells returned 8/8 and 8/8, and a real defect
+— the `{{near}}` bullet in D17 — became visible as a reproducible 0/8 instead of
+being written off as variance, which is exactly what happened to it first time.
+
+**`--temperature` overrides the card.** The cards stay as the record of what the
+publisher recommends; drafting is not what they recommend it for.
+
+**Cost:** low temperature narrows the candidate pool, and the point of drafting
+several is to have something to choose between. Every `cat/Bad_Usage` candidate
+at 0.2 is a paraphrase of every other. Raise it deliberately when the goal is
+range rather than a measurement — but do not compare two runs across it.
+
+## D19 — `{{near}}` is the second hint, and the tier is an input
+
+A hint may name the correction a child almost typed — "did you mean {{near}}?" —
+only at a `min_strike` above the default 3, paired with a gentler template at 3
+that asks them to spot it themselves.
+
+**Why:** review asked four times for copy that shows the name, and D14 forbids
+handing over an argument. Both are right about different moments. The first time
+a child misspells a name, working out which one they meant is the lesson; the
+third time, they are stuck and the lesson has failed. Two templates with the same
+`requires`, separated by `min_strike`, is the shape `slots.test.js` already
+sanctions and that no shipped template exercised.
+
+**The tier is chosen by the drafter, not the model.** Told in the payload that
+`{{near}}` needs a raised `min_strike`, gemma-4-26b wrote `{{near}}` at
+`min_strike` 3 on all sixteen candidates across two slots — the authoring
+prompt's own "min_strike is 3 unless this is a blunter second hint" competes and
+wins. `draft.py --min-strike` makes it an input, and the payload then says only
+what is allowed at that tier. Yield went 0/8 to 6/6.
+
+That is the same lesson as D17 twice over: a rule the model must *infer from a
+conflict* does not survive, and moving `grounding_rules` from the end of the
+payload to beside `applicable_decorators` — nothing else — took `cat/Bad_Usage`
+from 1/8 to 8/8. Position, not just presence.
+
+**Cost:** the pair is a design that the tools do not enforce. Nothing checks that
+a blunt template has a gentle partner, so a slot can ship with only the
+answer-giving half. That is a coverage question the reachability work has not
+been extended to yet.
+
+## D20 — In-memory VFS or a real sandbox *(Proposed)*
+
+**Status: open.** Nothing below is decided. The full assessment, with measured
+output, is [`proposals/real-sandbox.md`](proposals/real-sandbox.md).
+
+**What exists:** the child's commands are evaluated against an in-memory VFS.
+That choice was never recorded here. Its benefits were real and simply assumed:
+determinism for free (D1), an engine-assigned Status the slot system keys on
+(D13), a world containing only the names a lesson chose, and no way for input to
+reach a fork bomb, a network or the disk.
+
+**What is proposed:** real programs against a real directory tree, inside an OS
+sandbox that binds everything they spawn, so commands are not rewritten and the
+child learns the real behaviour.
+
+**What the spike established:**
+
+- bubblewrap gives a private world with `/` at the scenario root, with no root
+  privileges, and the host is unreachable.
+- **Two slots in `slots.json` describe errors that real Linux does not have.**
+  Bare `cd` and bare `cat` both exit 0. The VFS invented `expected one folder
+  name` and `expected one file name`. That is the divergence the proposal is
+  worried about, found by running something real beside the simulation.
+- Host binaries are dynamically linked, so `lib64` and `usr` appear in the
+  child's `ls /`. Only static binaries avoid that.
+
+**The recommendation on the table:** a real sandbox with a pinned, static toolset
+and `LC_ALL=C`, not host programs. Pinning is what keeps D1; static linking is
+what keeps the world curated.
+
+**What would be given up:** Status stops being assigned and has to be parsed from
+programs we did not write, which makes D2 the engine's core; safety limits the
+VFS got by construction have to be built; and a program waiting on stdin is a
+stuck state with no failure, so no strike and no hint.
+
+**To decide:** whether the shell is the Odin REPL or a real shell, which static
+toolset, and how a silent wait becomes visible. The two `Bad_Usage` slots are
+worth retiring whichever way this goes.

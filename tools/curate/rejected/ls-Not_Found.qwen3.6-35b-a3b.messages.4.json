@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "id": "verify-target-name-spelling",
+  "match": {
+    "command": "ls",
+    "status": "Not_Found"
+  },
+  "min_strike": 3,
+  "title": "Verify target name spelling",
+  "body": "The error mentions 'No such file or directory' for {{target}}. Did you check the exact spelling of the names in this folder?",
+  "ttl_ms": 14000
+}

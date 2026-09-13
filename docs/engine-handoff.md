@@ -4,6 +4,13 @@ For whoever picks up the Odin side. Everything outside `engine/` has moved a
 long way while the engine has not been compiled once, so this is the map between
 the two and an honest list of what is trustworthy.
 
+> **Open proposal — read before building on the VFS.** Replacing the in-memory
+> VFS with real programs inside a bubblewrap sandbox is under discussion (D20).
+> [`proposals/real-sandbox.md`](proposals/real-sandbox.md) has the measured
+> results: it runs without root, but host binaries leak `usr`/`lib64` into the
+> child's world, and two slots in `slots.json` model errors real Linux does not
+> have. Nothing is decided.
+
 ## Start here
 
 ```bash

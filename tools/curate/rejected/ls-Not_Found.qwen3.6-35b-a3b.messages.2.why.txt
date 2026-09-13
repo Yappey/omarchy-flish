@@ -1,0 +1,1 @@
+The hedge about spelling vs. “elsewhere” is not outright false, but it never shows bare `ls`, `cd`, or a path, and with empty `requires` the four declared decorators are unused phantoms—so two different cases (sibling typo vs. item deeper in `lighthouse/`) are mashed into one unguided catch-all.

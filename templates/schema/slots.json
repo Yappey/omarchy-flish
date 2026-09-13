@@ -5,11 +5,14 @@
     "target_exists": "The first argument resolves to a node in the VFS.",
     "target_is_file": "The first argument resolves to a file rather than a directory.",
     "cwd_has_children": "The directory the child is standing in contains anything at all.",
+    "cwd_has_files": "At least one file sits in the directory the child is standing in. Ask \"which file did you mean?\" only where this is true.",
+    "cwd_has_dirs": "At least one folder sits in the directory the child is standing in. Ask \"which folder did you mean?\" only where this is true.",
     "target_near_sibling": "A sibling of the cwd has a name within edit distance 2 of what was typed -- the typo case.",
     "target_in_parent": "The name that was not found here does exist one level up -- the wrong-room case.",
     "cwd_is_root": "The child is at the top of the tree, so there is no further up to go.",
     "target_is_empty_dir": "The first argument resolves to a directory with nothing in it.",
-    "argv_count": "How many arguments the verb was given. An integer, not a boolean."
+    "argv_count": "How many arguments the verb was given. An integer, not a boolean.",
+    "near_sibling_is_dir": "The near-miss sibling is a directory rather than a file. Only meaningful alongside target_near_sibling."
   },
   "slots": [
     {
@@ -21,6 +24,8 @@
       "applicable_decorators": [
         "argv_count",
         "cwd_has_children",
+        "cwd_has_files",
+        "cwd_has_dirs",
         "cwd_is_root"
       ]
     },
@@ -32,7 +37,10 @@
       "concept": "the name does not exist here",
       "applicable_decorators": [
         "cwd_has_children",
+        "cwd_has_files",
+        "cwd_has_dirs",
         "target_near_sibling",
+        "near_sibling_is_dir",
         "target_in_parent",
         "cwd_is_root"
       ]
@@ -45,6 +53,8 @@
       "concept": "file versus directory",
       "applicable_decorators": [
         "cwd_has_children",
+        "cwd_has_files",
+        "cwd_has_dirs",
         "target_in_parent",
         "cwd_is_root"
       ]
@@ -57,7 +67,10 @@
       "concept": "the name does not exist here",
       "applicable_decorators": [
         "cwd_has_children",
+        "cwd_has_files",
+        "cwd_has_dirs",
         "target_near_sibling",
+        "near_sibling_is_dir",
         "target_in_parent",
         "cwd_is_root"
       ]
@@ -70,7 +83,9 @@
       "concept": "argument count",
       "applicable_decorators": [
         "argv_count",
-        "cwd_has_children"
+        "cwd_has_children",
+        "cwd_has_files",
+        "cwd_has_dirs"
       ]
     },
     {
@@ -81,7 +96,10 @@
       "concept": "the name does not exist here",
       "applicable_decorators": [
         "cwd_has_children",
+        "cwd_has_files",
+        "cwd_has_dirs",
         "target_near_sibling",
+        "near_sibling_is_dir",
         "target_in_parent",
         "cwd_is_root"
       ]
@@ -95,6 +113,7 @@
       "applicable_decorators": [
         "target_is_empty_dir",
         "cwd_has_children",
+        "cwd_has_files",
         "cwd_is_root"
       ]
     },
@@ -105,9 +124,32 @@
       "has_target": false,
       "concept": "the verb itself is not a command",
       "applicable_decorators": [
-        "cwd_has_children"
+        "cwd_has_children",
+        "cwd_has_files",
+        "cwd_has_dirs"
       ],
       "note": "command is empty because this slot matches any unrecognised verb. A template for it leaves match.command unset."
     }
-  ]
+  ],
+  "forbidden_vocabulary": {
+    "words": [
+      "sibling",
+      "siblings",
+      "cwd",
+      "argv",
+      "decorator",
+      "decorators",
+      "parameter",
+      "parameters",
+      "argument",
+      "arguments",
+      "boolean",
+      "placeholder",
+      "schema",
+      "regex",
+      "substring",
+      "target"
+    ],
+    "note": "Engineering vocabulary from the matcher, rejected in hint bodies. A seven year old does not read these. 'directory' is deliberately absent: it is the word the authentic error uses, so the child has already seen it and the hint should echo it. Slots whose concept is argument count are the hard case -- say what the child typed or did not type, not that a verb 'expects one argument'."
+  }
 }

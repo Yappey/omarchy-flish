@@ -1,0 +1,1 @@
+While the first sentence ("you gave it nothing to read") is technically accurate regarding bare cat, the second sentence ("which file did you mean?") is misleading in this world. At cwd /, there are no files—only subdirectories (lighthouse/ and rocks/). Implyin
