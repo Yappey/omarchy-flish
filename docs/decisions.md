@@ -384,3 +384,42 @@ from 1/8 to 8/8. Position, not just presence.
 a blunt template has a gentle partner, so a slot can ship with only the
 answer-giving half. That is a coverage question the reachability work has not
 been extended to yet.
+
+## D20 — In-memory VFS or a real sandbox *(Proposed)*
+
+**Status: open.** Nothing below is decided. The full assessment, with measured
+output, is [`proposals/real-sandbox.md`](proposals/real-sandbox.md).
+
+**What exists:** the child's commands are evaluated against an in-memory VFS.
+That choice was never recorded here. Its benefits were real and simply assumed:
+determinism for free (D1), an engine-assigned Status the slot system keys on
+(D13), a world containing only the names a lesson chose, and no way for input to
+reach a fork bomb, a network or the disk.
+
+**What is proposed:** real programs against a real directory tree, inside an OS
+sandbox that binds everything they spawn, so commands are not rewritten and the
+child learns the real behaviour.
+
+**What the spike established:**
+
+- bubblewrap gives a private world with `/` at the scenario root, with no root
+  privileges, and the host is unreachable.
+- **Two slots in `slots.json` describe errors that real Linux does not have.**
+  Bare `cd` and bare `cat` both exit 0. The VFS invented `expected one folder
+  name` and `expected one file name`. That is the divergence the proposal is
+  worried about, found by running something real beside the simulation.
+- Host binaries are dynamically linked, so `lib64` and `usr` appear in the
+  child's `ls /`. Only static binaries avoid that.
+
+**The recommendation on the table:** a real sandbox with a pinned, static toolset
+and `LC_ALL=C`, not host programs. Pinning is what keeps D1; static linking is
+what keeps the world curated.
+
+**What would be given up:** Status stops being assigned and has to be parsed from
+programs we did not write, which makes D2 the engine's core; safety limits the
+VFS got by construction have to be built; and a program waiting on stdin is a
+stuck state with no failure, so no strike and no hint.
+
+**To decide:** whether the shell is the Odin REPL or a real shell, which static
+toolset, and how a silent wait becomes visible. The two `Bad_Usage` slots are
+worth retiring whichever way this goes.
